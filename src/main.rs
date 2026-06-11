@@ -2,9 +2,9 @@ use std::env;
 use std::fs;
 // use std::fs::File;
 // use std::io::Write;
+use std::io::{self, Write};
 use std::path::Path;
 use std::path::PathBuf;
-use std::io::{self, Write};
 
 use anyhow::{Context, Result};
 use reqwest::header::{ACCEPT, USER_AGENT};
@@ -199,6 +199,7 @@ async fn update_project_struct(project_path: &std::path::PathBuf, max_steps: u8)
         ("uuid", None),
         ("serde", Some("derive")),
         ("serde_json", None),
+        ("anyhow", None),
     ];
 
     for (dep, feature) in dependency_to_add_list {
@@ -324,9 +325,11 @@ fn project_name_is_valid(project_name: &str) -> bool {
     true
 }
 
-
-fn select_serial_port() -> Option<String> {
+fn select_serial_port(is_manual: bool) -> Option<String> {
     let ports = get_available_serial_ports();
+    if is_manual {
+        return None;
+    }
 
     if ports.is_empty() {
         log(
@@ -797,7 +800,6 @@ fn build_project() -> bool {
     }
 }
 
-
 fn get_available_serial_ports() -> Vec<String> {
     let output = Command::new("bash")
         .arg("-c")
@@ -811,7 +813,9 @@ fn get_available_serial_ports() -> Vec<String> {
             .lines()
             .map(|line| line.trim().to_string())
             .filter(|line| !line.is_empty())
-            .filter(|item| item.contains("usbserial") || item.contains("ttyUSB") || item.contains("ttyACM"))
+            .filter(|item| {
+                item.contains("usbserial") || item.contains("ttyUSB") || item.contains("ttyACM")
+            })
             .collect()
     } else {
         log(
@@ -823,7 +827,7 @@ fn get_available_serial_ports() -> Vec<String> {
     }
 }
 
-fn run_project_flash() -> bool {
+fn run_project_flash(port: Option<String>) -> bool {
     let get_config =
         load_config(&std::env::current_dir().expect("Failed to get current directory"));
 
@@ -836,17 +840,50 @@ fn run_project_flash() -> bool {
         return false;
     }
     let config = get_config.unwrap();
-    let get_valid_port  = select_serial_port();
+    let get_valid_port = select_serial_port(port.is_some());
     if get_valid_port.is_none() {
+        log(
+            "No valid serial port selected. Flashing process aborted.",
+            "Serial Port Selection",
+            LogType::Error,
+        );
         return false;
     }
-    let selected_port = get_valid_port.unwrap();
+    let mut selected_port = get_valid_port.unwrap();
 
-    let status = Command::new("cargo")
+    if port.is_some() {
+        selected_port = port.unwrap();
+    }
+
+    if selected_port.is_empty() {
+        log(
+            "Selected serial port is empty. Flashing process aborted.",
+            "Serial Port Selection",
+            LogType::Error,
+        );
+        return false;
+    }
+
+    let elf_path = Path::new(&config.project_path)
+        .join("target")
+        .join("xtensa-esp32-espidf")
+        .join("debug")
+        .join(&config.project_name);
+
+    if !elf_path.exists() {
+        log(
+            &format!("Built ELF file not found at: {}", elf_path.display()),
+            "Flashing",
+            LogType::Error,
+        );
+        return false;
+    }
+
+    let status = Command::new("espflash")
         .arg("flash")
         .arg("--monitor")
-        .arg("--port")
-        .arg(&selected_port)
+        .arg(&elf_path)
+        .env("ESPFLASH_PORT", &selected_port)
         .current_dir(&config.project_path)
         .status();
 
@@ -887,7 +924,7 @@ async fn main() {
     let args: Vec<String> = env::args().collect();
     /*
      ["project", "create" , "project_name" , '--path' , 'path/to/project']
-     ["project", "run"  ]
+     ["project", "run" , "--port" , "serial_port"]
      ["project" , "build" ]
      ["project", "help"]
      ["project", "add" , "{component_name}"]
@@ -1018,20 +1055,31 @@ async fn main() {
             }
         }
         "run" => {
-            let valid_build = build_project();
-            if valid_build {
-                log(
-                    "Build successful. Starting flash process...",
-                    "Run",
-                    LogType::Info,
-                );
-                return;
-            }
-            let flash_result = run_project_flash();
-            if flash_result {
-                log("Project flashed successfully!", "Run", LogType::Complete);
+            if args.len() >= 4 && args[2] == "--port" {
+                let port = args[3].clone();
+                let valid_build = build_project();
+                if !valid_build {
+                    log("Build failed. Cannot flash project.", "Run", LogType::Error);
+                    return;
+                }
+                let flash_result = run_project_flash(Some(port));
+                if flash_result {
+                    log("Project flashed successfully!", "Run", LogType::Complete);
+                } else {
+                    log("Failed to flash project.", "Run", LogType::Error);
+                }
             } else {
-                log("Failed to flash project.", "Run", LogType::Error);
+                let valid_build = build_project();
+                if !valid_build {
+                    log("Build failed. Cannot flash project.", "Run", LogType::Error);
+                    return;
+                }
+                let flash_result = run_project_flash(None);
+                if flash_result {
+                    log("Project flashed successfully!", "Run", LogType::Complete);
+                } else {
+                    log("Failed to flash project.", "Run", LogType::Error);
+                }
             }
         }
 
