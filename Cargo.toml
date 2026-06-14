@@ -11,6 +11,7 @@ unique_id = "0.1.7"
 reqwest = { version = "0.12", features = ["json"] }
 
 tokio = { version = "1", features = ["full"] }
+serialport = "4.9.0"
 
 anyhow = "1"
 
