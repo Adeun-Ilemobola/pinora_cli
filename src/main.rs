@@ -49,11 +49,9 @@ async fn load_all_modules() -> Result<Vec<GitHubItem>, String> {
 }
 
 async fn install_component(component_name: &str) {
-    // (1) check if the component exists in the module registry (github repo)
-    let modules = load_all_modules().await;
-    let get_config =
-        load_config(&std::env::current_dir().expect("Failed to get current directory"));
+    let current_dir = std::env::current_dir().expect("Failed to get current directory");
 
+    let get_config = load_config(&current_dir);
     if get_config.is_none() {
         log(
             "Project config file does not exist in the current directory. Please provide a valid project path or create a project first.",
@@ -63,12 +61,10 @@ async fn install_component(component_name: &str) {
         return;
     }
 
+    let modules = load_all_modules().await;
+
     match modules {
         Ok(modules) => {
-            println!(
-                "Loaded modules from registry: {:?}",
-                modules.iter().map(|m| &m.name).collect::<Vec<&String>>()
-            );
             if let Some(component) = modules
                 .into_iter()
                 .find(|m| m.name.to_lowercase() == component_name.to_lowercase())
@@ -91,10 +87,7 @@ async fn install_component(component_name: &str) {
                     return;
                 }
 
-                let is_valid_project = project_file_valid(
-                    &std::env::current_dir().expect("Failed to get current directory"),
-                );
-                if !is_valid_project {
+                if !project_file_valid(&current_dir) {
                     log(
                         "Current directory is not a valid project. Please navigate to a valid project directory and try again.",
                         "Component Installation",
@@ -114,11 +107,7 @@ async fn install_component(component_name: &str) {
                     BRANCH_NAME,
                     component.name
                 );
-                let module_folder_path = std::env::current_dir()
-                    .expect("Failed to get current directory")
-                    .join("src")
-                    .join("module");
-
+                let module_folder_path = current_dir.join("src").join("module");
                 let output_path = module_folder_path.join(&component.name);
 
                 match download_file(new_component, &output_path).await {
@@ -132,10 +121,12 @@ async fn install_component(component_name: &str) {
                             "Component Installation",
                             LogType::Info,
                         );
-                        let mod_file = module_folder_path.join("mod.rs");
-                        let installed_components = &get_config.unwrap().install_components;
 
-                        let mod_contents = installed_components
+                        let mod_file = module_folder_path.join("mod.rs");
+                        let mut all_components = get_config.unwrap().install_components.clone();
+                        all_components.push(component_name.to_string());
+
+                        let mod_contents = all_components
                             .iter()
                             .map(|text| text.trim().replace(".rs", ""))
                             .map(|c| format!("pub mod {};", c.to_lowercase()))
@@ -143,6 +134,19 @@ async fn install_component(component_name: &str) {
                             .join("\n");
 
                         fs::write(&mod_file, mod_contents).expect("Failed to write to mod.rs");
+
+                        let update_success =
+                            update_config_file_with_component(&current_dir, component_name);
+                        if !update_success {
+                            log(
+                                &format!(
+                                    "Failed to update project config with component '{}'.",
+                                    component_name
+                                ),
+                                "Component Installation",
+                                LogType::Error,
+                            );
+                        }
                     }
                     Err(e) => log(
                         &format!("Failed to install component '{}': {}", component_name, e),
@@ -150,28 +154,12 @@ async fn install_component(component_name: &str) {
                         LogType::Error,
                     ),
                 }
-                let update_success = update_config_file_with_component(
-                    &std::env::current_dir().expect("Failed to get current directory"),
-                    component_name,
-                );
-                if !update_success {
-                    log(
-                        &format!(
-                            "Failed to update project config with component '{}'.",
-                            component_name
-                        ),
-                        "Component Installation",
-                        LogType::Error,
-                    );
-                }
-                // Proceed with installation
             } else {
                 log(
                     &format!("Component '{}' not found in registry.", component_name),
                     "Component Installation",
                     LogType::Error,
                 );
-                return;
             }
         }
         Err(e) => {
@@ -180,7 +168,6 @@ async fn install_component(component_name: &str) {
                 "Component Installation",
                 LogType::Error,
             );
-            return;
         }
     }
 }

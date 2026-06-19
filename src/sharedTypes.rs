@@ -43,6 +43,7 @@ pub struct ProgressEvent<'a> {
      Error,
      Complete,
      Loading,
+     Installing,
      Finished
  }
 #[derive(Debug, Serialize, Clone, Deserialize)]
@@ -53,3 +54,15 @@ pub struct ProgressLogShape {
 }
 
 pub static BRANCH_NAME: &str = "v0"; // can be set to "main" or "dev" depending on which branch you want to pull template files from
+
+#[derive(Debug, Clone)]
+pub struct UISourceFile {
+    pub source_url: String,
+    pub output_path: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct UIReplacement {
+    pub source_url: String,
+    pub target_path: String,
+}

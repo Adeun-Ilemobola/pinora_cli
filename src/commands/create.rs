@@ -1,12 +1,16 @@
 
+use crate::file_json::load_files_json;
 use crate::sharedTypes::{LogType, ProjectConfig, ProgressType};
-use crate::projectConfigDatabase::{load_project_database, update_project_struct, save_project_to_database};
-use crate::utility::{log, progress_log};
+use crate::projectConfigDatabase::{load_project_database ,save_project_to_database};
+use crate::utility::{download_file, log, progress_log};
+use crate::sharedTypes::{ TemplateFile};
+use std::path::{ PathBuf};
 use crate::projectConfig::{create_config, project_name_is_valid};
 use std::process::Command;
 use uuid::Uuid;
 
 const CREATE_ID: &str = "create-project";
+const BILD_STRUCT :&str = "update_project_struct";
 
 async fn create_project(
     current_dir: &std::path::PathBuf,
@@ -92,7 +96,7 @@ async fn create_project(
         CREATE_ID.to_string(),
     );
 
-    if !update_project_struct(&project_dir, 99).await {
+    if !update_project_struct(&project_dir).await {
         log("Failed to update project structure.", "Project Structure Update", LogType::Error);
         return None;
     }
@@ -141,13 +145,9 @@ pub async fn pre_create(input:&Vec<String>) {
     if !project_name_is_valid(&project_name) {
         return;
     }
-    if input.len() >= 5 && input[3] == "--path" {
+
+    let target_dir = if input.len() >= 5 && input[3] == "--path" {
         let custom_path = std::path::PathBuf::from(&input[4]);
-        log(
-            &format!("the path: {}", custom_path.display()),
-            "Path Validation",
-            LogType::Info,
-        );
         if !custom_path.exists() || !custom_path.is_dir() {
             log(
                 "Provided path does not exist or is not a directory.",
@@ -156,72 +156,164 @@ pub async fn pre_create(input:&Vec<String>) {
             );
             return;
         }
-        let project_path = custom_path.join(&project_name);
-        if project_path.exists() {
+        custom_path
+    } else {
+        current_dir
+    };
+
+    progress_log(
+        ProgressType::Loading,
+        format!("Creating project '{}' at {}", project_name, target_dir.display()),
+        CREATE_ID.to_string(),
+    );
+
+    match create_project(&target_dir, &project_name).await {
+        Some(config_data) => {
             log(
-                "Project already exists at the provided path.",
+                &format!(
+                    "Project '{}' created successfully at {}!",
+                    config_data.project_name,
+                    target_dir.join(&config_data.project_name).display()
+                ),
+                "Project Creation",
+                LogType::Info,
+            );
+        }
+        None => {
+            log(
+                "Failed to create project.",
                 "Project Creation",
                 LogType::Error,
             );
-            return;
         }
-        match create_project(&custom_path, &project_name).await {
-            Some(config_data) => {
-                log(
-                    &format!(
-                        "Project '{}' created successfully at {}!",
-                        config_data.project_name,
-                        project_path.display()
-                    ),
-                    "Project Creation",
-                    LogType::Info,
-                );
-            }
-            None => {
-                log(
-                    "Failed to create project.",
-                    "Project Creation",
-                    LogType::Error,
-                );
-            }
-        }
-    } else if input.len() >= 3 {
-        log(
-            &format!("the path: {}", current_dir.display()),
-            "Path Validation",
-            LogType::Info,
-        );
-        match create_project(&current_dir, &project_name).await {
-            Some(config_data) => {
-                log(
-                    &format!(
-                        "Project '{}' created successfully at {}!",
-                        config_data.project_name,
-                        current_dir.join(&config_data.project_name).display()
-                    ),
-                    "Project Creation",
-                    LogType::Info,
-                );
-            }
-            None => {
-                log(
-                    "Failed to create project.",
-                    "Project Creation",
-                    LogType::Error,
-                );
-            }
-        }
-    } else {
-        log(
-            "Invalid command format. Please provide a project name and optionally a path.",
-            "Command Validation",
-            LogType::Error,
-        );
-        log(
-            "Example: project create my_project --path /path/to/projects",
-            "Command Validation",
-            LogType::Info,
-        );
-        return;
     }
+}
+
+
+async fn update_project_struct(project_path: &std::path::PathBuf) -> bool {
+    let manifest_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let files_json_path = manifest_path.join("src").join("files.json");
+
+    progress_log(
+        ProgressType::Loading,
+        "Loading template files from files.json...".to_string(),
+        BILD_STRUCT.to_string(),
+    );
+
+    let files: Vec<TemplateFile> = load_files_json(&files_json_path).await.unwrap();
+
+    for file in files.iter() {
+        progress_log(
+            ProgressType::Loading,
+            format!(
+                "Downloading: {}",
+                file.name.as_ref().unwrap_or(&file.output_path)
+            ),
+            BILD_STRUCT.to_string(),
+        );
+        let output_path = project_path.join(&file.output_path);
+
+        match download_file(&file.source_url, &output_path).await {
+            Ok(_) => progress_log(
+                ProgressType::Complete,
+                format!("Downloaded: {}", file.name.as_ref().unwrap_or(&file.output_path)),
+                BILD_STRUCT.to_string(),
+            ),
+            Err(e) => {
+                progress_log(
+                    ProgressType::Error,
+                    format!("Failed to download {}: {}", output_path.display(), e),
+                    BILD_STRUCT.to_string(),
+                );
+                log(
+                    &format!("Failed to create file {}: {}", output_path.display(), e),
+                    "Project Structure Update",
+                    LogType::Error,
+                );
+            }
+        }
+    }
+
+    let dependency_to_add_list = vec![
+        ("uuid", None),
+        ("serde", Some("derive")),
+        ("serde_json", None),
+        ("anyhow", None),
+    ];
+
+    progress_log(
+        ProgressType::Installing,
+        format!("Installing {} dependencies...", dependency_to_add_list.len()),
+        BILD_STRUCT.to_string(),
+    );
+
+    for (dep, feature) in dependency_to_add_list {
+        progress_log(
+            ProgressType::Installing,
+            format!("Adding dependency '{}'...", dep),
+            BILD_STRUCT.to_string(),
+        );
+        let mut cmd = Command::new("cargo");
+        cmd.arg("add").arg(dep).current_dir(&project_path);
+        if let Some(feature_name) = feature {
+            cmd.arg("--features").arg(feature_name);
+        }
+        match cmd.status() {
+            Ok(status) if status.success() => progress_log(
+                ProgressType::Complete,
+                format!("Dependency '{}' added.", dep),
+                BILD_STRUCT.to_string(),
+            ),
+            Ok(status) => progress_log(
+                ProgressType::Error,
+                format!("Failed to add '{}'. Exit status: {}", dep, status),
+                BILD_STRUCT.to_string(),
+            ),
+            Err(e) => progress_log(
+                ProgressType::Error,
+                format!("Failed to run cargo add for '{}': {}", dep, e),
+                BILD_STRUCT.to_string(),
+            ),
+        };
+    }
+
+    progress_log(
+        ProgressType::Installing,
+        "Patching Cargo.toml with uuid version constraint...".to_string(),
+        BILD_STRUCT.to_string(),
+    );
+
+    let cargo_toml_path = project_path.join("Cargo.toml");
+    if cargo_toml_path.exists() {
+        let mut cargo_toml_content =
+            std::fs::read_to_string(&cargo_toml_path).expect("Failed to read Cargo.toml");
+        let marker = "[dependencies]";
+        let dependency_to_add = r#"uuid = { version = "1.23.2", features = ["v4"] }"#;
+        if let Some(index) = cargo_toml_content.find(marker) {
+            let old_dependency_line = cargo_toml_content
+                .lines()
+                .find(|line| line.contains(r#"uuid = "1.20.0"#));
+            if let Some(old_line) = old_dependency_line {
+                cargo_toml_content = cargo_toml_content.replace(old_line, "");
+            }
+
+            let insert_position = index + marker.len();
+            cargo_toml_content.insert_str(insert_position, &format!("\n{}", dependency_to_add));
+        }
+
+        std::fs::write(&cargo_toml_path, cargo_toml_content).expect("Failed to update Cargo.toml");
+        progress_log(
+            ProgressType::Complete,
+            "Cargo.toml patched with uuid dependency.".to_string(),
+            BILD_STRUCT.to_string(),
+        );
+    }
+
+    progress_log(
+        ProgressType::Finished,
+        "Project structure update complete.".to_string(),
+        BILD_STRUCT.to_string(),
+    );
+
+    return true;
 }

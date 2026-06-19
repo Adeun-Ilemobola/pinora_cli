@@ -1,7 +1,8 @@
-use crate::sharedTypes::{LogType, ProgressEvent, ProgressLogShape, ProgressType};
+use crate::sharedTypes::{LogType, ProgressEvent, ProgressLogShape, ProgressType, UIReplacement, UISourceFile};
 use anyhow::Result;
 use std::io::{self, Write};
 use std::path::Path;
+use std::process::Command;
 
 pub async fn download_file(git_url: &str, output_path: &Path) -> Result<()> {
     let content = reqwest::get(git_url).await?.text().await?;
@@ -133,4 +134,49 @@ pub fn progress_log(stage: ProgressType, message: String, id: String) {
     let event = ProgressLogShape { stage, id, message };
     let json = serde_json::to_string(&event).expect("Failed to serialize progress event");
     println!("__ESP_PROGRESS__:{}", json);
+}
+
+pub fn pre_build_ui(project_path: &Path) -> bool {
+    progress_log(
+        ProgressType::Installing,
+        "Installing Tauri app with bun...".to_string(),
+        "pre-build-ui".to_string(),
+    );
+
+    let status = Command::new("bun")
+        .args(["create", "tauri-app"])
+        .current_dir(project_path)
+        .status();
+
+    match status {
+        Ok(s) if s.success() => {
+            progress_log(
+                ProgressType::Complete,
+                "Tauri app created successfully.".to_string(),
+                "pre-build-ui".to_string(),
+            );
+            true
+        }
+        Ok(s) => {
+            log(
+                &format!("bun create tauri-app failed with exit status: {}", s),
+                "UI Setup",
+                LogType::Error,
+            );
+            false
+        }
+        Err(e) => {
+            log(
+                &format!("Failed to run bun create tauri-app: {}", e),
+                "UI Setup",
+                LogType::Error,
+            );
+            false
+        }
+    }
+}
+
+pub async fn build_ui(_files: Vec<UISourceFile>, _replacements: Vec<UIReplacement>) {
+    // TODO: download files from source_url to output_path
+    // TODO: apply replacements from source_url into target_path
 }
