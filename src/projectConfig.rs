@@ -1,18 +1,32 @@
+use std::path::PathBuf;
+
 use crate::projectConfigDatabase::update_project_config;
-use crate::sharedTypes::{LogType, ProjectConfig};
+use crate::sharedTypes::{ESP_FOLDER_NAME, LogType, ProjectConfig, UI_FOLDER_NAME};
 use crate::utility::log;
 
+pub fn load_config() -> Option<ProjectConfig> {
+    let rootdir = &std::env::current_dir().expect("Failed to get current directory");
+    let config_path_file = rootdir.join(".espConfig/esp_config.json");
 
-pub fn load_config(path: &std::path::PathBuf) -> Option<ProjectConfig> {
-    let config_path_file = path.join(".espConfig/esp_config.json");
-    if !config_path_file.exists() {
-        return None;
+    let mut current_config: Option<ProjectConfig> = None;
+    let possible_path: [PathBuf; 3] = [
+        rootdir.clone(),
+        rootdir.join(&ESP_FOLDER_NAME).clone(),
+        rootdir.join(&UI_FOLDER_NAME).clone(),
+    ];
+    for p in possible_path {
+        if p.join(&config_path_file).exists() {
+            let config_content = std::fs::read_to_string(&config_path_file)
+                .expect("Failed to read project config file");
+            let config: ProjectConfig =
+                serde_json::from_str(&config_content).expect("Failed to parse project config file");
+
+            current_config = Some(config);
+            break;
+        }
     }
-    let config_content =
-        std::fs::read_to_string(&config_path_file).expect("Failed to read project config file");
-    let config: ProjectConfig =
-        serde_json::from_str(&config_content).expect("Failed to parse project config file");
-    Some(config)
+
+    return current_config;
 }
 pub fn save_config(path: &std::path::PathBuf, config: &ProjectConfig) -> Option<ProjectConfig> {
     let config_path_file = path.join(".espConfig/esp_config.json");
@@ -36,37 +50,38 @@ pub fn update_config_file_with_component(
     project_path: &std::path::PathBuf,
     component_name: &str,
 ) -> bool {
-    let config_path = project_path.join(".espConfig/esp_config.json");
-    if !config_path.exists() {
-        log(
-            "Project config file does not exist.",
-            "Project Config Update",
-            LogType::Error,
-        );
-        return false;
+   
+    if let Some(mut config) = load_config() {
+        let install_components = &mut config.install_components;
+
+        install_components.push(component_name.to_string());
+
+        if save_config(project_path, &config).is_some() {
+            log(
+                &format!("Component '{}' added to project config.", component_name),
+                "Project Config Update",
+                LogType::Info,
+            );
+            update_project_config(&config);
+            return true;
+        } else {
+            log(
+                "Failed to find 'install_components' in project config.",
+                "Project Config Update",
+                LogType::Error,
+            );
+            return false;
+        }
     }
-    let mut config = load_config(project_path).expect("Failed to load project config");
-    let install_components = &mut config.install_components;
-    install_components.push(component_name.to_string());
-    if save_config(project_path, &config).is_some() {
-        log(
-            &format!("Component '{}' added to project config.", component_name),
-            "Project Config Update",
-            LogType::Info,
-        );
-        update_project_config(&config);
-        return true;
-    } else {
-        log(
-            "Failed to find 'install_components' in project config.",
-            "Project Config Update",
-            LogType::Error,
-        );
-        return false;
-    }
+    log(
+        "Project config file does not exist.",
+        "Project Config Update",
+        LogType::Error,
+    );
+    return false;
 }
 pub fn create_config(path: &std::path::PathBuf, config: &ProjectConfig) -> Option<ProjectConfig> {
-    let get_config = load_config(path);
+    let get_config = load_config();
 
     if get_config.is_none() {
         log(

@@ -51,7 +51,7 @@ async fn load_all_modules() -> Result<Vec<GitHubItem>, String> {
 async fn install_component(component_name: &str) {
     let current_dir = std::env::current_dir().expect("Failed to get current directory");
 
-    let get_config = load_config(&current_dir);
+    let get_config = load_config();
     if get_config.is_none() {
         log(
             "Project config file does not exist in the current directory. Please provide a valid project path or create a project first.",
@@ -87,14 +87,6 @@ async fn install_component(component_name: &str) {
                     return;
                 }
 
-                if !project_file_valid(&current_dir) {
-                    log(
-                        "Current directory is not a valid project. Please navigate to a valid project directory and try again.",
-                        "Component Installation",
-                        LogType::Error,
-                    );
-                    return;
-                }
 
                 log(
                     &format!("Component '{}' found in registry.", component_name),
@@ -171,9 +163,10 @@ async fn install_component(component_name: &str) {
         }
     }
 }
+
+
 fn run_project_flash(port: Option<String>) -> bool {
-    let get_config =
-        load_config(&std::env::current_dir().expect("Failed to get current directory"));
+    let get_config =load_config();
 
     if get_config.is_none() {
         log(
@@ -184,7 +177,9 @@ fn run_project_flash(port: Option<String>) -> bool {
         return false;
     }
     let config = get_config.unwrap();
+    
     let get_valid_port = select_serial_port(port.is_some());
+
     if get_valid_port.is_none() {
         log(
             "No valid serial port selected. Flashing process aborted.",
@@ -208,7 +203,7 @@ fn run_project_flash(port: Option<String>) -> bool {
         return false;
     }
 
-    let elf_path = Path::new(&config.project_path)
+    let elf_path = Path::new(&config.firmware_path)
         .join("target")
         .join("xtensa-esp32-espidf")
         .join("debug")
@@ -228,7 +223,7 @@ fn run_project_flash(port: Option<String>) -> bool {
         .arg("--monitor")
         .arg(&elf_path)
         .env("ESPFLASH_PORT", &selected_port)
-        .current_dir(&config.project_path)
+        .current_dir(&config.firmware_path)
         .status();
 
     match status {

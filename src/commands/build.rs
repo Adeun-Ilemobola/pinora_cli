@@ -13,8 +13,7 @@ pub fn build_esp() -> bool {
         BUILD_ID.to_string(),
     );
 
-    let get_config =
-        load_config(&std::env::current_dir().expect("Failed to get current directory"));
+    let get_config =load_config();
     if get_config.is_none() {
         progress_log(
             ProgressType::Error,
@@ -40,7 +39,7 @@ pub fn build_esp() -> bool {
     let status = Command::new("bash")
         .arg("-lc")
         .arg(build_script)
-        .current_dir(&config.project_path)
+        .current_dir(&config.firmware_path)
         .status();
 
     match status {

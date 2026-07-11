@@ -1,4 +1,9 @@
 use serde::{Deserialize, Serialize};
+
+pub  static UI_FOLDER_NAME:&str = "UI";
+pub  static ESP_FOLDER_NAME:&str = "Firmware";
+
+
 #[derive(Debug, Deserialize)]
 pub struct TemplateFile {
     pub name: Option<String>,
@@ -39,7 +44,7 @@ pub static TAURI_DEPENDENCY_LIST: [CargoDependency; 5] = [
         features: &[],
     },
 ];
-pub  struct  UiTemplate {
+pub  struct  Template {
     pub name: &'static str,
     pub source_path: &'static str,
     pub output_path: &'static str,
@@ -48,7 +53,7 @@ pub  struct  UiTemplate {
 }
 macro_rules! ui_template {
     ($path:literal) => {
-        UiTemplate {
+        Template {
             name: $path,
             source_path: concat!(
                 "https://raw.githubusercontent.com/esp-rust/esp-rust-templates/v0/ui/",
@@ -61,7 +66,46 @@ macro_rules! ui_template {
     };
 }
 
-pub static UI_TEMPLATE_LIST: [UiTemplate; 23] = [
+
+
+
+macro_rules! firmware_template {
+    ($path:literal) => {
+        Template {
+            name: $path,
+            source_path: concat!(
+                "https://raw.githubusercontent.com/Adeun-Ilemobola/rust_esp32_based/v0/",
+                $path
+            ),
+            output_path: $path,
+            swap: false,
+            replacement: "",
+        }
+    };
+}
+pub static FIRMWARE_TEMPLATE_LIST: [Template; 12] = [
+    // Core
+    firmware_template!("src/core/hardware.rs"),
+    firmware_template!("src/core/mod.rs"),
+    firmware_template!("src/core/modulecore.rs"),
+
+    // Modules
+    firmware_template!("src/module/buttonmodule.rs"),
+    firmware_template!("src/module/ledmodule.rs"),
+    firmware_template!("src/module/mod.rs"),
+
+    // Utilities
+    firmware_template!("src/utilities/logger.rs"),
+    firmware_template!("src/utilities/math.rs"),
+    firmware_template!("src/utilities/mod.rs"),
+    firmware_template!("src/utilities/moduleconfig.rs"),
+    firmware_template!("src/utilities/serdeprotocol.rs"),
+
+    // Firmware entry point
+    firmware_template!("src/main.rs"),
+];
+
+pub static UI_TEMPLATE_LIST: [Template; 23] = [
     ui_template!("vite.config.ts"),
     ui_template!("tsconfig.node.json"),
     ui_template!("tsconfig.json"),
@@ -106,7 +150,9 @@ pub struct GitHubItem {
 #[derive(Debug, Serialize, Clone, Deserialize)]
 pub struct ProjectConfig {
     pub project_name: String,
-    pub project_path: String,
+    // pub project_path: String,
+    pub firmware_path:String,
+    pub  ui_path:String,
     pub id: String,
     pub build_command: String,
     pub flash_command: String,

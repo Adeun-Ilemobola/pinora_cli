@@ -1,32 +1,35 @@
-
 use crate::file_json::load_files_json;
-use crate::sharedTypes::{LogType, ProjectConfig, ProgressType};
-use crate::projectConfigDatabase::{load_project_database ,save_project_to_database};
+use crate::projectConfig::{create_config, project_name_is_valid, save_config};
+use crate::projectConfigDatabase::{load_project_database, save_project_to_database};
+use crate::sharedTypes::{ESP_FOLDER_NAME, FIRMWARE_TEMPLATE_LIST, TemplateFile};
+use crate::sharedTypes::{LogType, ProgressType, ProjectConfig};
 use crate::utility::{download_file, log, progress_log};
-use crate::sharedTypes::{ TemplateFile};
-use std::path::{ PathBuf};
-use crate::projectConfig::{create_config, project_name_is_valid};
+use std::fs;
+use std::path::PathBuf;
 use std::process::Command;
 use uuid::Uuid;
 
 const CREATE_ID: &str = "create-project";
-const BILD_STRUCT :&str = "update_project_struct";
+const BILD_STRUCT: &str = "update_project_struct";
 
 async fn create_project(
     current_dir: &std::path::PathBuf,
-    project_name: &str,
+    root_folder_name: &String,
 ) -> Option<ProjectConfig> {
-    let project_dir = current_dir.join(&project_name);
+    let project_dir = current_dir.join(&ESP_FOLDER_NAME);
 
     progress_log(
         ProgressType::Loading,
-        format!("Checking project directory for '{}'", project_name),
+        format!("Checking project directory for '{}'", ESP_FOLDER_NAME),
         CREATE_ID.to_string(),
     );
 
     if project_dir.exists() {
         log(
-            &format!("Project directory already exists at: {}", project_dir.display()),
+            &format!(
+                "Project directory already exists at: {}",
+                project_dir.display()
+            ),
             "Project Creation",
             LogType::Warning,
         );
@@ -35,7 +38,7 @@ async fn create_project(
 
     progress_log(
         ProgressType::Loading,
-        format!("Running cargo generate for '{}'", project_name),
+        format!("Running cargo generate for '{}'", ESP_FOLDER_NAME),
         CREATE_ID.to_string(),
     );
 
@@ -45,7 +48,7 @@ async fn create_project(
         .arg("esp-rs/esp-idf-template")
         .arg("cargo")
         .arg("--name")
-        .arg(&project_name)
+        .arg(&ESP_FOLDER_NAME)
         .arg("-d")
         .arg("mcu=esp32")
         .arg("-d")
@@ -54,7 +57,11 @@ async fn create_project(
         .expect("Failed to run cargo generate");
 
     if !gen_status.success() {
-        log("Failed to generate project.", "Project Generation", LogType::Error);
+        log(
+            "Failed to generate project.",
+            "Project Generation",
+            LogType::Error,
+        );
         return None;
     }
 
@@ -64,31 +71,15 @@ async fn create_project(
         CREATE_ID.to_string(),
     );
 
-    let project_identifier = create_config(
-        &project_dir,
-        &ProjectConfig {
-            project_name: project_name.to_string(),
-            project_path: project_dir.display().to_string(),
-            id: Uuid::new_v4().to_string(),
-            build_command: "source ~/export-esp.sh && cargo build".to_string(),
-            flash_command: "cargo flash --monitor --port /dev/ttyUSB0".to_string(),
-            install_components: Vec::new(),
-        },
-    );
-
-    let config_data = match project_identifier {
-        Some(ref c) => c,
-        None => {
-            log("Failed to create project config file.", "Project Config Creation", LogType::Error);
-            return None;
-        }
+    let config_data = ProjectConfig {
+        project_name: root_folder_name.clone(),
+        ui_path: String::new(),
+        firmware_path: project_dir.display().to_string(),
+        id: Uuid::new_v4().to_string(),
+        build_command: "source ~/export-esp.sh && cargo build".to_string(),
+        flash_command: "cargo flash --monitor --port /dev/ttyUSB0".to_string(),
+        install_components: Vec::new(),
     };
-
-    progress_log(
-        ProgressType::Complete,
-        "Project config file created".to_string(),
-        CREATE_ID.to_string(),
-    );
 
     progress_log(
         ProgressType::Loading,
@@ -97,23 +88,18 @@ async fn create_project(
     );
 
     if !update_project_struct(&project_dir).await {
-        log("Failed to update project structure.", "Project Structure Update", LogType::Error);
+        log(
+            "Failed to update project structure.",
+            "Project Structure Update",
+            LogType::Error,
+        );
         return None;
     }
 
-    save_project_to_database(&config_data);
-
-    progress_log(
-        ProgressType::Finished,
-        format!("Project '{}' created at {}", project_name, project_dir.display()),
-        CREATE_ID.to_string(),
-    );
-
-    Some(config_data.clone())
+    Some(config_data)
 }
 
-
-pub async fn pre_create(input:&Vec<String>) {
+pub async fn pre_create(input: &Vec<String>) {
     let current_dir = std::env::current_dir().expect("Failed to get current directory");
 
     if input.len() < 3 {
@@ -133,6 +119,7 @@ pub async fn pre_create(input:&Vec<String>) {
     );
 
     let all_projects = load_project_database().expect("Failed to load project database");
+
     if all_projects.iter().any(|p| p.project_name == project_name) {
         log(
             "A project with this name already exists in the database. Please choose a different name.",
@@ -161,14 +148,40 @@ pub async fn pre_create(input:&Vec<String>) {
         current_dir
     };
 
+    let make_root_folder = target_dir.join(&project_name);
+    let _ = fs::create_dir(&make_root_folder);
+
     progress_log(
         ProgressType::Loading,
-        format!("Creating project '{}' at {}", project_name, target_dir.display()),
+        format!(
+            "Creating project '{}' at {}",
+            &project_name,
+            make_root_folder.display()
+        ),
         CREATE_ID.to_string(),
     );
 
-    match create_project(&target_dir, &project_name).await {
+    match create_project(&make_root_folder, &project_name).await {
         Some(config_data) => {
+            save_project_to_database(&config_data);
+            save_config(&make_root_folder, &config_data);
+
+            progress_log(
+                ProgressType::Complete,
+                "Project config file created".to_string(),
+                CREATE_ID.to_string(),
+            );
+
+            progress_log(
+                ProgressType::Finished,
+                format!(
+                    "Project '{}' created at {}",
+                    project_name.clone(),
+                    config_data.firmware_path
+                ),
+                CREATE_ID.to_string(),
+            );
+
             log(
                 &format!(
                     "Project '{}' created successfully at {}!",
@@ -189,34 +202,19 @@ pub async fn pre_create(input:&Vec<String>) {
     }
 }
 
-
 async fn update_project_struct(project_path: &std::path::PathBuf) -> bool {
-    let manifest_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let files_json_path = manifest_path.join("src").join("files.json");
-
-    progress_log(
-        ProgressType::Loading,
-        "Loading template files from files.json...".to_string(),
-        BILD_STRUCT.to_string(),
-    );
-
-    let files: Vec<TemplateFile> = load_files_json(&files_json_path).await.unwrap();
-
-    for file in files.iter() {
+    for file in &FIRMWARE_TEMPLATE_LIST {
         progress_log(
             ProgressType::Loading,
-            format!(
-                "Downloading: {}",
-                file.name.as_ref().unwrap_or(&file.output_path)
-            ),
+            format!("Downloading: {}", file.name),
             BILD_STRUCT.to_string(),
         );
         let output_path = project_path.join(&file.output_path);
 
-        match download_file(&file.source_url, &output_path).await {
+        match download_file(&file.source_path, &output_path).await {
             Ok(_) => progress_log(
                 ProgressType::Complete,
-                format!("Downloaded: {}", file.name.as_ref().unwrap_or(&file.output_path)),
+                format!("Downloaded: {}", file.name),
                 BILD_STRUCT.to_string(),
             ),
             Err(e) => {
@@ -243,7 +241,10 @@ async fn update_project_struct(project_path: &std::path::PathBuf) -> bool {
 
     progress_log(
         ProgressType::Installing,
-        format!("Installing {} dependencies...", dependency_to_add_list.len()),
+        format!(
+            "Installing {} dependencies...",
+            dependency_to_add_list.len()
+        ),
         BILD_STRUCT.to_string(),
     );
 
