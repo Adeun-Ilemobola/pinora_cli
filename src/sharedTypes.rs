@@ -277,31 +277,26 @@ pub enum LogType {
     Info,
     Warning,
     Error,
-    Complete,
 }
-// #[derive(Serialize)]
-// pub struct ProgressEvent<'a> {
-//     pub stage: &'a str,
-//     pub message: &'a str,
-//     pub current: u8,
-//     pub total: u8,
-// }
 
+#[derive(Debug, Serialize, Clone, Copy, Deserialize)]
+pub enum ProgressType {
+    Started,
+    Step,
+    Finished,
+    Failed,
+}
 
-
-#[derive(Debug, Serialize, Clone, Deserialize)]
- pub enum ProgressType {
-     Error,
-     Complete,
-     Loading,
-     Installing,
-     Finished
- }
+/// One progress event. Every task emits exactly one `Started` and exactly one terminal
+/// event (`Finished` or `Failed`), so a consumer can always close out a task it opened.
 #[derive(Debug, Serialize, Clone, Deserialize)]
 pub struct ProgressLogShape {
-    pub stage :ProgressType,
-    pub message:String,
-    pub id:String
+    pub task: String,
+    pub stage: ProgressType,
+    pub message: String,
+    pub detail: Option<String>,
+    pub step: u32,
+    pub total: u32,
 }
 
 pub static BRANCH_NAME: &str = "v0"; // can be set to "main" or "dev" depending on which branch you want to pull template files from

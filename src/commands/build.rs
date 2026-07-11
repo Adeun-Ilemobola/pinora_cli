@@ -1,80 +1,44 @@
-
-use crate::sharedtypes::{LogType, ProgressType};
-use crate::utility::{log, progress_log};
+use crate::progress::ProgressTask;
 use crate::project_config::load_config;
 use std::process::Command;
 
-const BUILD_ID: &str = "build-esp";
-
 pub fn build_esp() -> bool {
-    progress_log(
-        ProgressType::Loading,
-        "Loading project config".to_string(),
-        BUILD_ID.to_string(),
-    );
+    let mut task = ProgressTask::start("build", 2, "Preparing build");
 
-    let get_config =load_config();
-    if get_config.is_none() {
-        progress_log(
-            ProgressType::Error,
-            "Project config file does not exist. Create a project first or navigate to a valid project directory.".to_string(),
-            BUILD_ID.to_string(),
-        );
-        log(
-            "Project config file does not exist in the current directory. Please provide a valid project path or create a project first.",
-            "Project Validation",
-            LogType::Error,
+    let Some(config) = load_config() else {
+        task.fail(
+            "No project config found here. Run `esp create <name>`, or cd into an existing project.",
         );
         return false;
-    }
-    let config = get_config.unwrap();
+    };
+    task.step_with("Loaded project config", &config.project_name);
 
-    progress_log(
-        ProgressType::Loading,
-        format!("Running build command for '{}'", config.project_name),
-        BUILD_ID.to_string(),
+    task.step_with(
+        format!("Building '{}'", config.project_name),
+        &config.build_command,
     );
 
-    let build_script = &config.build_command;
+    // Inherits stdio, so cargo's own output goes straight to the terminal.
     let status = Command::new("bash")
         .arg("-lc")
-        .arg(build_script)
+        .arg(&config.build_command)
         .current_dir(&config.firmware_path)
         .status();
 
     match status {
         Ok(status) if status.success() => {
-            progress_log(
-                ProgressType::Finished,
-                format!("Build succeeded for '{}'", config.project_name),
-                BUILD_ID.to_string(),
-            );
+            task.finish(format!("Build succeeded for '{}'", config.project_name));
             true
         }
         Ok(status) => {
-            progress_log(
-                ProgressType::Error,
-                format!("Build failed with exit status: {}", status),
-                BUILD_ID.to_string(),
-            );
-            log(
-                &format!("Build failed with exit status: {}", status),
-                "Build",
-                LogType::Error,
-            );
+            task.fail(format!(
+                "Build failed for '{}' ({})",
+                config.project_name, status
+            ));
             false
         }
-        Err(e) => {
-            progress_log(
-                ProgressType::Error,
-                format!("Failed to run build command: {}", e),
-                BUILD_ID.to_string(),
-            );
-            log(
-                &format!("Failed to run build command: {}", e),
-                "Build",
-                LogType::Error,
-            );
+        Err(error) => {
+            task.fail(format!("Could not start the build command: {}", error));
             false
         }
     }

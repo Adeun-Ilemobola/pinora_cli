@@ -1,66 +1,76 @@
-use crate::utility::{ log};
-use crate::sharedtypes::{ProjectConfig, LogType };
+use crate::sharedtypes::{LogType, ProjectConfig};
+use crate::utility::log;
+use std::path::PathBuf;
 
+fn database_path() -> Option<PathBuf> {
+    Some(dirs::home_dir()?.join("esp_rust_projects.json"))
+}
 
-
-pub fn load_project_database() -> Option<Vec<ProjectConfig>> {
-    let projects: Vec<ProjectConfig> = Vec::new();
-
-    let home_dir = dirs::home_dir().expect("Failed to get home directory");
-
-    let db_path = home_dir.join("esp_rust_projects.json");
+/// Every known project. An unreadable or corrupt database is reported and treated as empty
+/// rather than panicking mid-command.
+pub fn load_project_database() -> Vec<ProjectConfig> {
+    let Some(db_path) = database_path() else {
+        log("Could not find your home directory.", "Project Database", LogType::Warning);
+        return Vec::new();
+    };
 
     if !db_path.exists() {
+        return Vec::new();
+    }
+
+    let Ok(contents) = std::fs::read_to_string(&db_path) else {
         log(
-            "Project database file does not exist. Creating a new one.",
+            &format!("Could not read {}.", db_path.display()),
             "Project Database",
             LogType::Warning,
         );
-        std::fs::write(&db_path, "[]").expect("Failed to create project database file");
-        return Some(projects);
+        return Vec::new();
+    };
+
+    serde_json::from_str(&contents).unwrap_or_else(|error| {
+        log(
+            &format!("Could not parse {}: {}", db_path.display(), error),
+            "Project Database",
+            LogType::Warning,
+        );
+        Vec::new()
+    })
+}
+
+fn write_database(projects: &[ProjectConfig]) {
+    let Some(db_path) = database_path() else {
+        return;
+    };
+    let Ok(serialised) = serde_json::to_string_pretty(projects) else {
+        return;
+    };
+
+    if let Err(error) = std::fs::write(&db_path, serialised) {
+        log(
+            &format!("Could not write {}: {}", db_path.display(), error),
+            "Project Database",
+            LogType::Error,
+        );
     }
-    let db_content =
-        std::fs::read_to_string(&db_path).expect("Failed to read project database file");
-    let parsed_projects: Vec<ProjectConfig> =
-        serde_json::from_str(&db_content).expect("Failed to parse project database file");
-    Some(parsed_projects)
 }
 
 pub fn save_project_to_database(project_config: &ProjectConfig) {
-    let mut projects = load_project_database().expect("Failed to load project database");
+    let mut projects = load_project_database();
     projects.push(project_config.clone());
-    let home_dir = dirs::home_dir().expect("Failed to get home directory");
-    let db_path = home_dir.join("esp_rust_projects.json");
-    std::fs::write(
-        &db_path,
-        serde_json::to_string_pretty(&projects).expect("Failed to serialize project database"),
-    )
-    .expect("Failed to write project database file");
-    log(
-        "Project saved to database successfully!",
-        "Project Database",
-        LogType::Info,
-    );
+    write_database(&projects);
 }
 
-
-
-pub  fn update_project_config(new_config: &ProjectConfig){
-    let get_projects = load_project_database().expect("Failed to load project database");
-    let  updated_projects: Vec<ProjectConfig> = get_projects.into_iter()
-        .map(|proj| if proj.id == new_config.id { new_config.clone() } else { proj })
+pub fn update_project_config(new_config: &ProjectConfig) {
+    let projects: Vec<ProjectConfig> = load_project_database()
+        .into_iter()
+        .map(|project| {
+            if project.id == new_config.id {
+                new_config.clone()
+            } else {
+                project
+            }
+        })
         .collect();
-    let home_dir = dirs::home_dir().expect("Failed to get home directory");
-    let db_path = home_dir.join("esp_rust_projects.json");
-    std::fs::write(
-        &db_path,
-        serde_json::to_string_pretty(&updated_projects).expect("Failed to serialize project database"),
-    )
-    .expect("Failed to write project database file");
-    log(
-        "Project saved to database successfully!",
-        "Project Database",
-        LogType::Info,
-    );
-}
 
+    write_database(&projects);
+}
