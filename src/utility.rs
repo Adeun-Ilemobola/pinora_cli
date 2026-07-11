@@ -1,6 +1,6 @@
-use crate::sharedTypes::{
-    CargoDependency, LogType, ProgressEvent, ProgressLogShape, ProgressType, TAURI_DEPENDENCY_LIST,
-    UI_TEMPLATE_LIST, UIReplacement, UISourceFile,
+use crate::sharedtypes::{
+    CargoDependency, LogType, NodeDependency, ProgressLogShape, ProgressType,
+    
 };
 use anyhow::Result;
 use std::io::{self, Write};
@@ -16,17 +16,17 @@ pub async fn download_file(git_url: &str, output_path: &Path) -> Result<()> {
     Ok(())
 }
 
-pub fn emit_progress(stage: &str, message: &str, current: u8, total: u8) {
-    let event = ProgressEvent {
-        stage,
-        message,
-        current,
-        total,
-    };
+// pub fn emit_progress(stage: &str, message: &str, current: u8, total: u8) {
+//     let event = ProgressEvent {
+//         stage,
+//         message,
+//         current,
+//         total,
+//     };
 
-    let json = serde_json::to_string(&event).expect("Failed to serialize progress event");
-    println!("__ESP_PROGRESS__:{}", json);
-}
+//     let json = serde_json::to_string(&event).expect("Failed to serialize progress event");
+//     println!("__ESP_PROGRESS__:{}", json);
+// }
 
 pub fn log(message: &str, milestone: &str, lt: LogType) {
     println!("\n");
@@ -44,7 +44,7 @@ pub fn log(message: &str, milestone: &str, lt: LogType) {
     println!("{}", text_for_log);
 }
 
-pub fn project_file_valid(current_dir: &std::path::Path) -> bool {
+pub fn _project_file_valid(current_dir: &std::path::Path) -> bool {
     if !current_dir.join(".espConfig/esp_config.json").exists() {
         log(
             "Project config file does not exist.",
@@ -139,7 +139,7 @@ pub fn progress_log(stage: ProgressType, message: String, id: String) {
     println!("__ESP_PROGRESS__:{}", json);
 }
 
-async fn  add_dependency(project_path: &str, dep: &CargoDependency, id: &str) -> std::io::Result<()> {
+pub async fn  add_dependency(project_path: &str, dep: &CargoDependency, id: &str) -> std::io::Result<()> {
     progress_log(
         ProgressType::Installing,
         format!("Adding dependency '{}'...", dep.name),
@@ -180,95 +180,100 @@ async fn  add_dependency(project_path: &str, dep: &CargoDependency, id: &str) ->
     }
 }
 
-pub async fn pre_build_ui(project_path: &Path) -> bool {
+pub async fn add_node_dependencies(
+    project_path: &Path,
+    deps: &[NodeDependency],
+    id: &str,
+) -> std::io::Result<()> {
+    for is_dev in [false, true] {
+        let packages: Vec<String> = deps
+            .iter()
+            .filter(|dep| dep.dev == is_dev)
+            .map(|dep| format!("{}@{}", dep.name, dep.version))
+            .collect();
+
+        if packages.is_empty() {
+            continue;
+        }
+
+        let kind = if is_dev { "dev" } else { "runtime" };
+
+        progress_log(
+            ProgressType::Installing,
+            format!("Installing {} {} package(s) with bun...", packages.len(), kind),
+            id.to_string(),
+        );
+
+        let mut command = Command::new("bun");
+        command.current_dir(project_path).arg("add");
+        if is_dev {
+            command.arg("--dev");
+        }
+        command.args(&packages);
+
+        let status = command.status()?;
+        if !status.success() {
+            progress_log(
+                ProgressType::Error,
+                format!("Failed to install {} packages.", kind),
+                id.to_string(),
+            );
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                format!("bun add failed for {} packages (exit status: {})", kind, status),
+            ));
+        }
+
+        progress_log(
+            ProgressType::Complete,
+            format!("Installed {} {} package(s).", packages.len(), kind),
+            id.to_string(),
+        );
+    }
+
+    Ok(())
+}
+
+pub async fn add_shadcn_components(
+    project_path: &Path,
+    components: &[&str],
+    id: &str,
+) -> std::io::Result<()> {
     progress_log(
         ProgressType::Installing,
-        "Installing Tauri app with bun...".to_string(),
-        "pre-build-ui".to_string(),
+        format!("Adding {} shadcn component(s)...", components.len()),
+        id.to_string(),
     );
 
-    let ui_project_name = "ui";
-
-    let status = tokio::process::Command::new("bun")
-        .args(["create", "tauri-app", ui_project_name, "-y"])
+    // The template's components.json is already in place, so the CLI skips init and honours
+    // its style/baseColor. `bunx` resolves the shadcn version pinned in package.json.
+    let status = Command::new("bunx")
         .current_dir(project_path)
-        .status()
-        .await;
-    match status {
-        Ok(s) if s.success() => {
-            let mut has_failed = false;
-            progress_log(
-                ProgressType::Complete,
-                "Tauri app created successfully.".to_string(),
-                "pre-build-ui".to_string(),
-            );
+        .arg("--bun")
+        .arg("shadcn")
+        .arg("add")
+        .args(components)
+        .arg("--yes")
+        // .arg("--overwrite")
+        .status()?;
 
-            let ui_project_path = project_path.join(ui_project_name);
-            let src_tauri_path = ui_project_path.join("src-tauri");
-            let src_tauri_path = src_tauri_path.to_str().unwrap_or_default();
-
-            progress_log(
-                ProgressType::Installing,
-                format!("Installing {} dependencies...", TAURI_DEPENDENCY_LIST.len()),
-                "pre-build-ui".to_string(),
-            );
-
-            for dep in TAURI_DEPENDENCY_LIST.iter() {
-                if let Err(e) = add_dependency(src_tauri_path, dep, "pre-build-ui").await {
-                    progress_log(
-                        ProgressType::Error,
-                        format!("Failed to run cargo add for '{}': {}", dep.name, e),
-                        "pre-build-ui".to_string(),
-                    );
-                }
-            }
-            for file_ob in UI_TEMPLATE_LIST.iter() {
-                let output_path = ui_project_path.join(file_ob.output_path.trim_start_matches('/'));
-                let _ = download_file(&file_ob.source_path, &output_path).await;
-
-                match tokio::fs::try_exists(&output_path).await {
-                    Ok(true) => {
-                        progress_log(
-                            ProgressType::Complete,
-                            format!("Downloaded template file '{}'.", file_ob.name),
-                            "pre-build-ui".to_string(),
-                        );
-                    }
-                    _ => {
-                        progress_log(
-                            ProgressType::Error,
-                            format!("Template file '{}' was not created.", file_ob.name),
-                            "pre-build-ui".to_string(),
-                        );
-                        has_failed = true;
-                        break;
-                    }
-                }
-            }
-
-            progress_log(
-                ProgressType::Finished,
-                "Tauri dependency installation complete.".to_string(),
-                "pre-build-ui".to_string(),
-            );
-
-            if has_failed { false } else { true }
-        }
-        Ok(s) => {
-            log(
-                &format!("bun create tauri-app failed with exit status: {}", s),
-                "UI Setup",
-                LogType::Error,
-            );
-            false
-        }
-        Err(e) => {
-            log(
-                &format!("Failed to run bun create tauri-app: {}", e),
-                "UI Setup",
-                LogType::Error,
-            );
-            false
-        }
+    if status.success() {
+        progress_log(
+            ProgressType::Complete,
+            format!("Added {} shadcn component(s).", components.len()),
+            id.to_string(),
+        );
+        Ok(())
+    } else {
+        progress_log(
+            ProgressType::Error,
+            "Failed to add shadcn components.".to_string(),
+            id.to_string(),
+        );
+        Err(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            format!("shadcn add failed (exit status: {})", status),
+        ))
     }
 }
+

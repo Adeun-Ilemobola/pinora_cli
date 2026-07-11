@@ -1,7 +1,7 @@
 
-use crate::sharedTypes::{LogType, ProgressType};
+use crate::sharedtypes::{LogType, ProgressType};
 use crate::utility::{log, progress_log};
-use crate::projectConfig::load_config;
+use crate::project_config::load_config;
 use std::process::Command;
 
 const BUILD_ID: &str = "build-esp";

@@ -1,8 +1,6 @@
-use crate::utility::{download_file, emit_progress, log};
-use crate::sharedTypes::{ProjectConfig, LogType , TemplateFile};
-use crate::file_json::load_files_json;
-use std::path::{ PathBuf};
-use std::process::Command;
+use crate::utility::{ log};
+use crate::sharedtypes::{ProjectConfig, LogType };
+
 
 
 pub fn load_project_database() -> Option<Vec<ProjectConfig>> {

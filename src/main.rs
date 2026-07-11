@@ -1,15 +1,15 @@
-mod sharedTypes;
+mod sharedtypes;
 mod utility;
 mod commands;
 mod file_json;
-mod projectConfigDatabase;
-mod projectConfig;
+mod project_config_database;
+mod project_config;
 use std::env;
 use std::fs;
 use std::path::Path;
-use sharedTypes::{GitHubItem, LogType , BRANCH_NAME};
-use utility::{download_file  , log , project_file_valid ,select_serial_port  };
-use projectConfig::{load_config   , update_config_file_with_component };
+use sharedtypes::{GitHubItem, LogType , BRANCH_NAME};
+use utility::{download_file  , log  ,select_serial_port  };
+use project_config::{load_config   , update_config_file_with_component };
 use anyhow::{ Result};
 use reqwest::header::{ACCEPT, USER_AGENT};
 use commands::create::{pre_create,};
@@ -17,6 +17,8 @@ use commands::build::{build_esp,};
 
 use std::process::Command;
 use tokio;
+
+use crate::sharedtypes::ESP_FOLDER_NAME;
 
 
 
@@ -177,7 +179,7 @@ fn run_project_flash(port: Option<String>) -> bool {
         return false;
     }
     let config = get_config.unwrap();
-    
+
     let get_valid_port = select_serial_port(port.is_some());
 
     if get_valid_port.is_none() {
@@ -207,7 +209,7 @@ fn run_project_flash(port: Option<String>) -> bool {
         .join("target")
         .join("xtensa-esp32-espidf")
         .join("debug")
-        .join(&config.project_name);
+        .join(&ESP_FOLDER_NAME);
 
     if !elf_path.exists() {
         log(

@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
-use crate::projectConfigDatabase::update_project_config;
-use crate::sharedTypes::{ESP_FOLDER_NAME, LogType, ProjectConfig, UI_FOLDER_NAME};
+use crate::project_config_database::update_project_config;
+use crate::sharedtypes::{ESP_FOLDER_NAME, LogType, ProjectConfig, UI_FOLDER_NAME};
 use crate::utility::log;
 
 pub fn load_config() -> Option<ProjectConfig> {
@@ -80,7 +80,8 @@ pub fn update_config_file_with_component(
     );
     return false;
 }
-pub fn create_config(path: &std::path::PathBuf, config: &ProjectConfig) -> Option<ProjectConfig> {
+
+pub fn _create_config(path: &std::path::PathBuf, config: &ProjectConfig) -> Option<ProjectConfig> {
     let get_config = load_config();
 
     if get_config.is_none() {
