@@ -3,6 +3,21 @@
 version = 4
 
 [[package]]
+name = "Pinora"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "dirs",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "serialport",
+ "tokio",
+ "unique_id",
+ "uuid",
+]
+
+[[package]]
 name = "anyhow"
 version = "1.0.102"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -75,21 +90,6 @@ name = "cfg-if"
 version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9330f8b2ff13f34540b44e946ef35111825727b38d33286ef986142615121801"
-
-[[package]]
-name = "cliEsp"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "dirs",
- "reqwest",
- "serde",
- "serde_json",
- "serialport",
- "tokio",
- "unique_id",
- "uuid",
-]
 
 [[package]]
 name = "core-foundation"
