@@ -6,5 +6,5 @@ install:
     cargo install --path .
 
 release:
-    cargo build --release
-    cargo install --path . --force
+   cargo build --release
+   cargo install --path . --force

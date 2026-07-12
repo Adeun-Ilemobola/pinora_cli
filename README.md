@@ -4,6 +4,10 @@ cargo build
 cargo install --path .
 
 
-cliEsp create testX1 --path /Users/adeun/Desktop/TEST
+pinora create testX1 --path /Users/adeun/Desktop/TEST
 
+<<<<<<< HEAD
 cliEsp listcomponents
+=======
+pinora listcomponents
+>>>>>>> 46292cf (feat: rename package to lowercase 'pinora' and update related documentation)
