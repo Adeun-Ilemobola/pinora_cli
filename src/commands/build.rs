@@ -2,7 +2,7 @@ use crate::progress::ProgressTask;
 use crate::project_config::load_config;
 use std::process::Command;
 
-pub fn build_esp() -> bool {
+pub fn build_esp(task_continue: bool) -> bool {
     let mut task = ProgressTask::start("build", 2, "Preparing build");
 
     let Some(config) = load_config() else {
@@ -27,7 +27,12 @@ pub fn build_esp() -> bool {
 
     match status {
         Ok(status) if status.success() => {
-            task.finish(format!("Build succeeded for '{}'", config.project_name));
+            if task_continue {
+                task.Complete(format!("Build succeeded for '{}'", config.project_name));
+            } else {
+                task.Complete(format!("Build succeeded for '{}'", config.project_name));
+            }
+
             true
         }
         Ok(status) => {

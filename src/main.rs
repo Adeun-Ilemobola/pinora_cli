@@ -204,7 +204,7 @@ fn run_project_flash(port: Option<String>) -> bool {
 
     match status {
         Ok(status) if status.success() => {
-            task.finish(format!(
+            task.Complete(format!(
                 "Flashed '{}' to {}",
                 config.project_name, selected_port
             ));
@@ -251,13 +251,13 @@ async fn main() {
             };
 
             // build_esp and run_project_flash each report their own progress and reasons.
-            if build_esp() {
+            if build_esp(true) {
                 run_project_flash(port);
             }
         }
 
         "build" => {
-            build_esp();
+            build_esp(false);
         }
 
         "add" => {

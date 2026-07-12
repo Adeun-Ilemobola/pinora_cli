@@ -97,7 +97,7 @@ pub async fn pre_create(input: &Vec<String>) {
     }
     save_project_to_database(&config);
 
-    task.finish(format!(
+    task.Complete(format!(
         "Project '{}' is ready at {}",
         config.project_name,
         root_dir.display()

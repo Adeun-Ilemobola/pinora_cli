@@ -285,6 +285,7 @@ pub enum ProgressType {
     Step,
     Finished,
     Failed,
+    Complete
 }
 
 /// One progress event. Every task emits exactly one `Started` and exactly one terminal
@@ -297,6 +298,7 @@ pub struct ProgressLogShape {
     pub detail: Option<String>,
     pub step: u32,
     pub total: u32,
+    
 }
 
 pub static BRANCH_NAME: &str = "v0"; // can be set to "main" or "dev" depending on which branch you want to pull template files from

@@ -64,6 +64,17 @@ impl ProgressTask {
             None,
         );
     }
+     pub fn Complete(
+        &self,
+        message: impl Into<String>,
+    ) {
+        self.emit(
+            ProgressType::Finished,
+            message.into(),
+            None,
+        );
+    }
+
 
     pub fn fail(
         &self,
@@ -81,6 +92,7 @@ impl ProgressTask {
         stage: ProgressType,
         message: String,
         detail: Option<String>,
+        
     ) {
         let event = ProgressLogShape {
             task: self.task.to_string(),
