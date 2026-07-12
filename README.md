@@ -1,4 +1,4 @@
-# RustEsp32_Scaffolder_CLI
+Pinora_CLI
 
 cargo build
 cargo install --path .
