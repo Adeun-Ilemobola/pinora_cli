@@ -170,7 +170,7 @@ async fn create_firmware(root_dir: &Path, project_name: &str) -> Option<ProjectC
 
     task.finish(format!("Firmware ready at {}", firmware_dir.display()));
 
-    Some(ProjectConfig {
+    let mut temp_config = ProjectConfig {
         project_name: project_name.to_string(),
         firmware_path,
         ui_path: String::new(),
@@ -178,7 +178,11 @@ async fn create_firmware(root_dir: &Path, project_name: &str) -> Option<ProjectC
         build_command: "source ~/export-esp.sh && cargo build".to_string(),
         flash_command: "cargo flash --monitor --port /dev/ttyUSB0".to_string(),
         install_components: Vec::new(),
-    })
+    };
+    temp_config.install_components.push("led".to_string());
+    temp_config.install_components.push("button".to_string());
+
+    Some(temp_config)
 }
 
 /// Scaffolds the Tauri UI: bun create, then the Rust side crates, the template files, the node

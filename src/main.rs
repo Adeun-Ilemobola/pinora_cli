@@ -176,12 +176,12 @@ async fn main() {
                 );
                 return;
             };
-            let component_name = if name.ends_with(".rs") {
-                name.clone()
-            } else {
-                format!("{}.rs", name)
-            };
-            let _= add_modules(component_name).await;
+            let component_name = name.strip_suffix(".rs").unwrap_or(name);
+            let component_name = component_name
+                .strip_suffix("module")
+                .unwrap_or(component_name)
+                .to_string();
+            let _ = add_modules(component_name).await;
         }
 
         "listcomponents" => match load_all_modules().await {

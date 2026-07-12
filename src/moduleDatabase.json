@@ -1,0 +1,17 @@
+[
+  {
+    "name": "led",
+    "source": "https://raw.githubusercontent.com/Adeun-Ilemobola/rust_esp32_based/refs/heads/v0/src/module/ledmodule.rs",
+    "default": true
+  },
+  {
+    "name": "servo",
+    "source": "https://raw.githubusercontent.com/Adeun-Ilemobola/rust_esp32_based/refs/heads/v0/src/module/servomodule.rs",
+    "default": false
+  },
+  {
+    "name": "button",
+    "source": "https://raw.githubusercontent.com/Adeun-Ilemobola/rust_esp32_based/refs/heads/v0/src/module/buttonmodule.rs",
+    "default": true
+  }
+]

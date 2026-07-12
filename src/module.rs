@@ -1,5 +1,6 @@
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
+use std::fs;
 use std::path::{Path, PathBuf};
 use tokio;
 
@@ -13,6 +14,28 @@ pub struct ModuleShape {
     pub name: String,
     pub source: String,
     pub default: bool,
+}
+
+fn update_module_mod_file(module_folder: &Path, module_name: &str) -> Result<bool> {
+    let mod_file = module_folder.join("mod.rs");
+    let mut contents = fs::read_to_string(&mod_file)
+        .with_context(|| format!("Failed to read {}", mod_file.display()))?;
+    let declaration = format!("pub mod {}module;", module_name);
+
+    if contents.lines().any(|line| line.trim() == declaration) {
+        return Ok(false);
+    }
+
+    if !contents.is_empty() && !contents.ends_with('\n') {
+        contents.push('\n');
+    }
+    contents.push_str(&declaration);
+    contents.push('\n');
+
+    fs::write(&mod_file, contents)
+        .with_context(|| format!("Failed to write {}", mod_file.display()))?;
+
+    Ok(true)
 }
 
 pub async fn load_modules() -> Result<Vec<ModuleShape>, anyhow::Error> {
@@ -29,7 +52,7 @@ pub async fn load_modules() -> Result<Vec<ModuleShape>, anyhow::Error> {
 }
 
 pub async fn add_modules(name: String) -> Result<(), anyhow::Error> {
-    let mut task = ProgressTask::start("add module", 8, format!("Installing component '{}'", name));
+    let mut task = ProgressTask::start("add module", 9, format!("Installing component '{}'", name));
 
     let database = match load_modules().await {
         Ok(database) => database,
@@ -63,14 +86,12 @@ pub async fn add_modules(name: String) -> Result<(), anyhow::Error> {
     };
     task.step_with("Loaded project config", &data.project_name);
 
-    if data.install_components.contains(&found_module.name) {
-        task.Complete(format!(
-            "'{}' is already installed in '{}', so nothing to do",
-            found_module.name, data.project_name
-        ));
-        return Ok(());
+    let already_recorded = data.install_components.contains(&found_module.name);
+    if already_recorded {
+        task.step("Component was already recorded; checking its files");
+    } else {
+        task.step("Confirmed the component is not installed yet");
     }
-    task.step("Confirmed the component is not installed yet");
 
     let firmware_path = PathBuf::from(&data.firmware_path);
 
@@ -81,7 +102,10 @@ pub async fn add_modules(name: String) -> Result<(), anyhow::Error> {
         ));
         return Ok(());
     };
-    task.step_with("Resolved project root", get_project_root.display().to_string());
+    task.step_with(
+        "Resolved project root",
+        get_project_root.display().to_string(),
+    );
 
     let firmware_module_folder = firmware_path.join("src").join("module");
 
@@ -101,40 +125,55 @@ pub async fn add_modules(name: String) -> Result<(), anyhow::Error> {
     let is_module_file = firmware_module_folder.join(&build_file_name);
 
     if is_module_file.is_file() {
-        task.Complete(format!(
-            "'{}' already exists on disk, so it was left untouched",
-            is_module_file.display()
-        ));
-        return Ok(());
+        task.step_with(
+            "Component source file already exists",
+            is_module_file.display().to_string(),
+        );
+    } else {
+        let source_url = format!(
+            "https://raw.githubusercontent.com/Adeun-Ilemobola/rust_esp32_based/refs/heads/{}/src/module/{}",
+            BRANCH_NAME, &build_file_name
+        );
+        if let Err(error) = download_file(&source_url, &firmware_module_folder).await {
+            task.fail(format!(
+                "Could not download '{}' from {}: {}",
+                build_file_name, source_url, error
+            ));
+            return Ok(());
+        }
+        task.step_with(format!("Downloaded '{}'", build_file_name), source_url);
     }
 
-    let source_url = format!(
-        "https://raw.githubusercontent.com/Adeun-Ilemobola/rust_esp32_based/refs/heads/{}/src/module/{}",
-        BRANCH_NAME, &build_file_name
-    );
-    if let Err(error) = download_file(&source_url, &firmware_module_folder).await {
-        task.fail(format!(
-            "Could not download '{}' from {}: {}",
-            build_file_name, source_url, error
-        ));
-        return Ok(());
+    match update_module_mod_file(&firmware_module_folder, &found_module.name) {
+        Ok(true) => task.step_with(
+            "Updated firmware module registry",
+            format!("pub mod {}module;", found_module.name),
+        ),
+        Ok(false) => task.step("Firmware module registry was already up to date"),
+        Err(error) => {
+            task.fail(format!(
+                "Downloaded '{}' but could not update src/module/mod.rs: {}",
+                found_module.name, error
+            ));
+            return Ok(());
+        }
     }
-    task.step_with(
-        format!("Downloaded '{}'", build_file_name),
-        source_url,
-    );
 
-    if !update_config_file_with_component(&get_project_root, &found_module.name) {
-        task.fail(format!(
-            "Downloaded '{}' but could not record it in the project config",
-            found_module.name
-        ));
-        return Ok(());
+    if already_recorded {
+        task.step("Project config was already up to date");
+    } else {
+        if !update_config_file_with_component(&get_project_root, &found_module.name) {
+            task.fail(format!(
+                "Downloaded '{}' but could not record it in the project config",
+                found_module.name
+            ));
+            return Ok(());
+        }
+        task.step_with(
+            "Recorded the component in the project config",
+            &found_module.name,
+        );
     }
-    task.step_with(
-        "Recorded the component in the project config",
-        &found_module.name,
-    );
 
     task.Complete(format!(
         "Installed '{}' into '{}'",
