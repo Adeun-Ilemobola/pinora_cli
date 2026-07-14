@@ -1,8 +1,8 @@
 use crate::progress::ProgressTask;
 use crate::project_config::{project_name_error, save_config};
 use crate::project_config_database::{load_project_database, save_project_to_database};
-use crate::sharedtypes::ProjectConfig;
-use crate::sharedtypes::{
+use crate::shared_types::ProjectConfig;
+use crate::shared_types::{
     ESP_FOLDER_NAME, FIRMWARE_DEPENDENCY_LIST, FIRMWARE_TEMPLATE_LIST, LogType,
     SHADCN_COMPONENT_LIST, TAURI_DEPENDENCY_LIST, UI_DEPENDENCY_LIST, UI_FOLDER_NAME,
     UI_TEMPLATE_LIST,

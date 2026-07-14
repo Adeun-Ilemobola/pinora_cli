@@ -4,7 +4,7 @@ mod file_json;
 mod progress;
 mod project_config;
 mod project_config_database;
-mod sharedtypes;
+mod shared_types;
 mod utility;
 
 use anyhow::Result;
@@ -13,7 +13,7 @@ use commands::create::pre_create;
 use progress::ProgressTask;
 use project_config::{load_config, update_config_file_with_component};
 use reqwest::header::{ACCEPT, USER_AGENT};
-use sharedtypes::{BRANCH_NAME, GitHubItem, LogType};
+use shared_types::{BRANCH_NAME, GitHubItem, LogType};
 use std::env;
 use std::fs;
 use std::path::Path;
@@ -21,7 +21,7 @@ use std::process::Command;
 use utility::{download_file, log, select_serial_port};
 
 use crate::module::add_modules;
-use crate::sharedtypes::ESP_FOLDER_NAME;
+use crate::shared_types::ESP_FOLDER_NAME;
 
 async fn load_all_modules() -> Result<Vec<GitHubItem>, String> {
     let url = &format!(

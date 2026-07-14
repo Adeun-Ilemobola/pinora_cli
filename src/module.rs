@@ -6,7 +6,7 @@ use tokio;
 
 use crate::progress::ProgressTask;
 use crate::project_config::{load_config, update_config_file_with_component};
-use crate::sharedtypes::BRANCH_NAME;
+use crate::shared_types::BRANCH_NAME;
 use crate::utility::download_file;
 
 #[derive(Debug, Serialize, Clone, Deserialize)]
@@ -39,7 +39,8 @@ fn update_module_mod_file(module_folder: &Path, module_name: &str) -> Result<boo
 }
 
 pub async fn load_modules() -> Result<Vec<ModuleShape>, anyhow::Error> {
-    let modules_data_file = PathBuf::from("moduleDatabase.json");
+    println!("{:?}", std::env::current_dir()?);
+    let modules_data_file = PathBuf::from("/Users/adeun/Pinora_Project/Pinora_CLI/src/moduleDatabase.json");
 
     let json_text = tokio::fs::read_to_string(&modules_data_file)
         .await
@@ -130,18 +131,15 @@ pub async fn add_modules(name: String) -> Result<(), anyhow::Error> {
             is_module_file.display().to_string(),
         );
     } else {
-        let source_url = format!(
-            "https://raw.githubusercontent.com/Adeun-Ilemobola/rust_esp32_based/refs/heads/{}/src/module/{}",
-            BRANCH_NAME, &build_file_name
-        );
-        if let Err(error) = download_file(&source_url, &firmware_module_folder).await {
+       
+        if let Err(error) = download_file(&found_module.source, &is_module_file).await {
             task.fail(format!(
                 "Could not download '{}' from {}: {}",
-                build_file_name, source_url, error
+                build_file_name, &found_module.source, error
             ));
             return Ok(());
         }
-        task.step_with(format!("Downloaded '{}'", build_file_name), source_url);
+        task.step_with(format!("Downloaded '{}'", build_file_name), &found_module.source);
     }
 
     match update_module_mod_file(&firmware_module_folder, &found_module.name) {

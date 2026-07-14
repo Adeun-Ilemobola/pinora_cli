@@ -1,5 +1,5 @@
 use crate::progress::ProgressTask;
-use crate::sharedtypes::{CargoDependency, LogType, NodeDependency};
+use crate::shared_types::{CargoDependency, LogType, NodeDependency};
 use anyhow::Result;
 use std::io::{self, Write};
 use std::path::Path;

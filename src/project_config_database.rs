@@ -1,4 +1,4 @@
-use crate::sharedtypes::{LogType, ProjectConfig};
+use crate::shared_types::{LogType, ProjectConfig};
 use crate::utility::log;
 use std::path::PathBuf;
 

@@ -209,7 +209,7 @@ macro_rules! ui_template {
         }
     };
 }
-pub static UI_TEMPLATE_LIST: [Template; 29] = [
+pub static UI_TEMPLATE_LIST: [Template; 30] = [
     ui_template!("vite.config.ts"),
     ui_template!("tsconfig.node.json"),
     ui_template!("tsconfig.json"),
@@ -232,6 +232,7 @@ pub static UI_TEMPLATE_LIST: [Template; 29] = [
     ui_template!("src/Hook/Zod.ts"),
     ui_template!("src/Hook/Command.ts"),
     ui_template!("src/Hook/Event.ts"),
+     ui_template!("src/Hook/moduleType.ts"),
 
     ui_template!("src/hooks/use-mobile.ts"),
 
