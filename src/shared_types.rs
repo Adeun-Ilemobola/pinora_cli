@@ -174,7 +174,7 @@ macro_rules! firmware_template {
         }
     };
 }
-pub static FIRMWARE_TEMPLATE_LIST: [Template; 12] = [
+pub static FIRMWARE_TEMPLATE_LIST: [Template; 15] = [
     // Core
     firmware_template!("src/core/hardware.rs"),
     firmware_template!("src/core/mod.rs"),
@@ -190,7 +190,15 @@ pub static FIRMWARE_TEMPLATE_LIST: [Template; 12] = [
     firmware_template!("src/utilities/math.rs"),
     firmware_template!("src/utilities/mod.rs"),
     firmware_template!("src/utilities/moduleconflg.rs"),
-    firmware_template!("src/utilities/serdeprotocol.rs"),
+    // firmware_template!("src/utilities/serdeprotocol.rs"),
+
+    // protocol
+    firmware_template!("src/protocol/command.rs"),
+    firmware_template!("src/protocol/mod.rs"),
+    firmware_template!("src/protocol/module_event.rs"),
+     firmware_template!("src/protocol/registration.rs"),
+
+
 
     // Firmware entry point
     firmware_template!("src/main.rs"),
@@ -228,6 +236,8 @@ pub static UI_TEMPLATE_LIST: [Template; 30] = [
     ui_template!("src/components/Modules/led.tsx"),
     // ui_template!("src/components/Modules/Servo.tsx"),
 
+
+    
     ui_template!("src/Hook/state.ts"),
     ui_template!("src/Hook/Zod.ts"),
     ui_template!("src/Hook/Command.ts"),
