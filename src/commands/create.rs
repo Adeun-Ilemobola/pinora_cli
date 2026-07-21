@@ -1,12 +1,12 @@
+use crate::firmware::firmware_definition::ESP_FOLDER_NAME;
+use crate::firmware::firmware_store::{FIRMWARE_DEPENDENCY_LIST, FIRMWARE_TEMPLATE_LIST};
+use crate::global_definition::{LogType, ProjectConfig};
 use crate::progress::ProgressTask;
 use crate::project_config::{project_name_error, save_config};
 use crate::project_config_database::{load_project_database, save_project_to_database};
-use crate::shared_types::ProjectConfig;
-use crate::shared_types::{
-    ESP_FOLDER_NAME, FIRMWARE_DEPENDENCY_LIST, FIRMWARE_TEMPLATE_LIST, LogType,
-    SHADCN_COMPONENT_LIST, TAURI_DEPENDENCY_LIST, UI_DEPENDENCY_LIST, UI_FOLDER_NAME,
-    UI_TEMPLATE_LIST,
-};
+
+use crate::ui::ui_definition::UI_FOLDER_NAME;
+use crate::ui::ui_store::{SHADCN_COMPONENT_LIST, TAURI_DEPENDENCY_LIST, UI_DEPENDENCY_LIST, UI_TEMPLATE_LIST};
 use crate::utility::{
     add_dependency, add_node_dependencies, add_shadcn_components, download_file, log,
     node_dependency_steps,

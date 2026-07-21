@@ -1,4 +1,5 @@
-use crate::shared_types::{ProgressLogShape, ProgressType};
+use crate::global_definition::{ProgressLogShape, ProgressType};
+
 
 pub struct ProgressTask {
     task: &'static str,

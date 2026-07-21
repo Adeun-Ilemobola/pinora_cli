@@ -6,7 +6,7 @@ use tokio;
 
 use crate::progress::ProgressTask;
 use crate::project_config::{load_config, update_config_file_with_component};
-use crate::shared_types::BRANCH_NAME;
+// use crate::shared_types::BRANCH_NAME;
 use crate::utility::download_file;
 
 #[derive(Debug, Serialize, Clone, Deserialize)]

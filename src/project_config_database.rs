@@ -1,5 +1,4 @@
-use crate::shared_types::{LogType, ProjectConfig};
-use crate::utility::log;
+use crate::{global_definition::{LogType, ProjectConfig}, utility::log};
 use std::path::PathBuf;
 
 fn database_path() -> Option<PathBuf> {

@@ -1,7 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use crate::project_config_database::update_project_config;
-use crate::shared_types::{ESP_FOLDER_NAME, ProjectConfig, UI_FOLDER_NAME};
+use crate::{firmware::firmware_definition::ESP_FOLDER_NAME, global_definition::ProjectConfig, project_config_database::update_project_config, ui::ui_definition::UI_FOLDER_NAME};
 
 const CONFIG_RELATIVE_PATH: &str = ".espConfig/esp_config.json";
 

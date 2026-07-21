@@ -6,22 +6,21 @@ mod project_config;
 mod project_config_database;
 mod shared_types;
 mod utility;
-
+mod firmware;
+mod global_definition;
+mod ui;
 use anyhow::Result;
 use commands::build::build_esp;
 use commands::create::pre_create;
 use progress::ProgressTask;
-use project_config::{load_config, update_config_file_with_component};
+use project_config::{load_config};
 use reqwest::header::{ACCEPT, USER_AGENT};
-use shared_types::{BRANCH_NAME, GitHubItem, LogType};
 use std::env;
-use std::fs;
 use std::path::Path;
 use std::process::Command;
-use utility::{download_file, log, select_serial_port};
+use utility::{ log, select_serial_port};
 
-use crate::module::add_modules;
-use crate::shared_types::ESP_FOLDER_NAME;
+use crate::{firmware::firmware_definition::ESP_FOLDER_NAME, global_definition::{BRANCH_NAME, GitHubItem, LogType}, module::add_modules};
 
 async fn load_all_modules() -> Result<Vec<GitHubItem>, String> {
     let url = &format!(
