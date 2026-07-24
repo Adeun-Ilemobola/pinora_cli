@@ -8,7 +8,7 @@ macro_rules! ui_template {
         Template {
             name: $path,
             source_path: concat!(
-                "https://raw.githubusercontent.com/Adeun-Ilemobola/tauri_esp_app/main/",
+                "https://raw.githubusercontent.com/Adeun-Ilemobola/Pinora_Templat/main/UI_Templates",
                 $path
             ),
             output_path: $path,

@@ -5,7 +5,7 @@ macro_rules! firmware_template {
         Template {
             name: $path,
             source_path: concat!(
-                "https://raw.githubusercontent.com/Adeun-Ilemobola/rust_esp32_based/v0/",
+                "https://raw.githubusercontent.com/Adeun-Ilemobola/Pinora_Templat/main/Firmware_Templates",
                 $path
             ),
             output_path: $path,

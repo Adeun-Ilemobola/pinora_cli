@@ -1,3 +1,4 @@
+use crate::commands::root::{ROOT_TEMPLATE_LIST, root_toml_file};
 use crate::firmware::firmware_definition::ESP_FOLDER_NAME;
 use crate::firmware::firmware_store::{FIRMWARE_DEPENDENCY_LIST, FIRMWARE_TEMPLATE_LIST};
 use crate::global_definition::{LogType, ProjectConfig};
@@ -6,7 +7,9 @@ use crate::project_config::{project_name_error, save_config};
 use crate::project_config_database::{load_project_database, save_project_to_database};
 
 use crate::ui::ui_definition::UI_FOLDER_NAME;
-use crate::ui::ui_store::{SHADCN_COMPONENT_LIST, TAURI_DEPENDENCY_LIST, UI_DEPENDENCY_LIST, UI_TEMPLATE_LIST};
+use crate::ui::ui_store::{
+    SHADCN_COMPONENT_LIST, TAURI_DEPENDENCY_LIST, UI_DEPENDENCY_LIST, UI_TEMPLATE_LIST,
+};
 use crate::utility::{
     add_dependency, add_node_dependencies, add_shadcn_components, download_file, log,
     node_dependency_steps,
@@ -27,7 +30,10 @@ pub async fn pre_create(input: &Vec<String>) {
 
     task.step_with("Validating project name", &project_name);
     if let Some(reason) = project_name_error(&project_name) {
-        task.fail(format!("Invalid project name '{}': {}", project_name, reason));
+        task.fail(format!(
+            "Invalid project name '{}': {}",
+            project_name, reason
+        ));
         return;
     }
 
@@ -61,7 +67,10 @@ pub async fn pre_create(input: &Vec<String>) {
     };
 
     let root_dir = target_dir.join(&project_name);
-    task.step_with("Preparing project directory", root_dir.display().to_string());
+    task.step_with(
+        "Preparing project directory",
+        root_dir.display().to_string(),
+    );
     if root_dir.exists() {
         log(
             &format!("{} already exists, reusing it", root_dir.display()),
@@ -80,13 +89,27 @@ pub async fn pre_create(input: &Vec<String>) {
 
     task.step("Setting up firmware");
     let Some(mut config) = create_firmware(&root_dir, &project_name).await else {
-        task.fail(format!("Firmware setup failed, so '{}' was not created", project_name));
+        task.fail(format!(
+            "Firmware setup failed, so '{}' was not created",
+            project_name
+        ));
         return;
     };
 
     task.step("Setting up UI");
     if !create_ui(&root_dir, &mut config).await {
-        task.fail(format!("UI setup failed, so '{}' is incomplete", project_name));
+        task.fail(format!(
+            "UI setup failed, so '{}' is incomplete",
+            project_name
+        ));
+        return;
+    }
+
+    if !create_root_files(&root_dir, &project_name).await {
+        task.fail(format!(
+            "Root file setup failed, so '{}' is incomplete",
+            project_name
+        ));
         return;
     }
 
@@ -102,6 +125,33 @@ pub async fn pre_create(input: &Vec<String>) {
         config.project_name,
         root_dir.display()
     ));
+}
+
+async fn create_root_files(root_dir: &Path, project_name: &str) -> bool {
+    for file in ROOT_TEMPLATE_LIST.iter() {
+        let output_path = root_dir.join(file.output_path);
+        if let Err(error) = download_file(file.source_path, &output_path).await {
+            log(
+                &format!("Could not download root template {}: {}", file.name, error),
+                "Create",
+                LogType::Error,
+            );
+            return false;
+        }
+    }
+
+    let toml = root_toml_file!(project_name, ESP_FOLDER_NAME, UI_FOLDER_NAME);
+    let toml_path = root_dir.join("pinora.toml");
+    if let Err(error) = fs::write(&toml_path, toml) {
+        log(
+            &format!("Could not write {}: {}", toml_path.display(), error),
+            "Create",
+            LogType::Error,
+        );
+        return false;
+    }
+
+    true
 }
 
 /// Scaffolds the ESP firmware crate: cargo generate, then the template files, then the crates.
@@ -200,7 +250,10 @@ pub async fn create_ui(root_dir: &Path, config: &mut ProjectConfig) -> bool {
         format!("Setting up UI in {}", ui_dir.display()),
     );
 
-    task.step_with("Creating Tauri app", "bun create tauri-app --template react-ts");
+    task.step_with(
+        "Creating Tauri app",
+        "bun create tauri-app --template react-ts",
+    );
     let status = Command::new("bun")
         .current_dir(root_dir)
         .arg("create")
