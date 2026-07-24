@@ -40,4 +40,17 @@ baud_rate = 115200
 
 pub(crate) use root_toml_file;
 
-pub(crate) static ROOT_TEMPLATE_LIST: [Template; 2] = [root_folder!("justfile") , root_folder!("gitignore")];
+pub(crate) static ROOT_TEMPLATE_LIST: [Template; 12] = [
+    root_folder!(".gitignore"),
+    root_folder!("Cargo.lock"),
+    root_folder!("Cargo.toml"),
+    root_folder!("README.md"),
+    root_folder!("justfile"),
+    root_folder!("lib.rs"),
+    root_folder!("protocol/command.rs"),
+    root_folder!("protocol/global_definitions.rs"),
+    root_folder!("protocol/mod.rs"),
+    root_folder!("protocol/module_event.rs"),
+    root_folder!("protocol/registration.rs"),
+    root_folder!("tests/protocol_wire.rs"),
+];

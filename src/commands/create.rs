@@ -11,8 +11,7 @@ use crate::ui::ui_store::{
     SHADCN_COMPONENT_LIST, TAURI_DEPENDENCY_LIST, UI_DEPENDENCY_LIST, UI_TEMPLATE_LIST,
 };
 use crate::utility::{
-    add_dependency, add_node_dependencies, add_shadcn_components, download_file, log,
-    node_dependency_steps,
+    add_dependency, add_node_dependencies, add_shadcn_components, download_file, edit_toml_file, log, node_dependency_steps
 };
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -130,6 +129,21 @@ pub async fn pre_create(input: &Vec<String>) {
 async fn create_root_files(root_dir: &Path, project_name: &str) -> bool {
     for file in ROOT_TEMPLATE_LIST.iter() {
         let output_path = root_dir.join(file.output_path);
+        if let Some(parent) = output_path.parent() {
+            if let Err(error) = fs::create_dir_all(parent) {
+                log(
+                    &format!(
+                        "Could not create root template directory {}: {}",
+                        parent.display(),
+                        error
+                    ),
+                    "Create",
+                    LogType::Error,
+                );
+                return false;
+            }
+        }
+
         if let Err(error) = download_file(file.source_path, &output_path).await {
             log(
                 &format!("Could not download root template {}: {}", file.name, error),
@@ -203,8 +217,8 @@ async fn create_firmware(root_dir: &Path, project_name: &str) -> Option<ProjectC
 
     for file in FIRMWARE_TEMPLATE_LIST.iter() {
         task.step_with("Downloading firmware template", file.name);
-        let output_path = firmware_dir.join(file.output_path);
-        if let Err(error) = download_file(file.source_path, &output_path).await {
+        // let output_path = firmware_dir.join(file.output_path);
+        if let Err(error) = download_file(file.source_path, &firmware_dir).await {
             task.fail(format!("Could not download {}: {}", file.name, error));
             return None;
         }
@@ -217,6 +231,19 @@ async fn create_firmware(root_dir: &Path, project_name: &str) -> Option<ProjectC
             return None;
         }
     }
+    let firmware_tomil_file = firmware_dir.join("Cargo.toml");
+    let target = "[dependencies]";
+    let new_content: &str = r#"pinora-shared = { path = ".." }"#;
+    match edit_toml_file(firmware_tomil_file, target, new_content) {
+        Ok(_) => {}
+        Err(error) => {
+            task.fail(format!(
+                "Could not update the firmware Cargo.toml: {}",
+                error
+            ));
+            return None;
+        }
+    };
 
     task.finish(format!("Firmware ready at {}", firmware_dir.display()));
 
@@ -285,6 +312,17 @@ pub async fn create_ui(root_dir: &Path, config: &mut ProjectConfig) -> bool {
             return false;
         }
     }
+
+    let ui_toml_file = ui_dir.join("src-tauri").join("Cargo.toml");
+    let target = "[dependencies]";
+    let new_content = r#"pinora-shared = { path = "../.." }"#;
+    match edit_toml_file(ui_toml_file, target, new_content) {
+        Ok(_) => {}
+        Err(error) => {
+            task.fail(format!("Could not update the UI Cargo.toml: {}", error));
+            return false;
+        }
+    };
 
     for file in UI_TEMPLATE_LIST.iter() {
         task.step_with("Downloading UI template", file.name);

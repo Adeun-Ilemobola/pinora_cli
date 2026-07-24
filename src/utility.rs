@@ -1,10 +1,11 @@
 use crate::global_definition::{CargoDependency, LogType};
 use crate::progress::ProgressTask;
 use crate::ui::ui_definition::NodeDependency;
-use anyhow::Result;
+use anyhow::{Context, Result};
 use std::io::{self, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::fs;
 
 pub async fn download_file(git_url: &str, output_path: &Path) -> Result<()> {
     let content = reqwest::get(git_url).await?.text().await?;
@@ -184,4 +185,45 @@ pub fn add_shadcn_components(
     }
 
     Err(io::Error::other(format!("shadcn add failed ({})", status)))
+}
+
+
+
+
+
+pub fn edit_toml_file(
+    file: PathBuf,
+    target: &str,
+    new_content: &str,
+) -> Result<()> {
+    if !file.is_file() {
+        anyhow::bail!("TOML file does not exist: {}", file.display());
+    }
+
+    let content = fs::read_to_string(&file)
+        .with_context(|| format!("Failed to read {}", file.display()))?;
+
+    let target_position = content
+        .find(target)
+        .with_context(|| {
+            format!(
+                "Target {target:?} was not found in {}",
+                file.display()
+            )
+        })?;
+
+    let insertion_position = target_position + target.len();
+
+    let mut updated_content =
+        String::with_capacity(content.len() + new_content.len() + 2);
+
+    updated_content.push_str(&content[..insertion_position]);
+    updated_content.push('\n');
+    updated_content.push_str(new_content);
+    updated_content.push_str(&content[insertion_position..]);
+
+    fs::write(&file, updated_content)
+        .with_context(|| format!("Failed to write {}", file.display()))?;
+
+    Ok(())
 }

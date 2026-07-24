@@ -4,7 +4,6 @@ mod file_json;
 mod progress;
 mod project_config;
 mod project_config_database;
-mod shared_types;
 mod utility;
 mod firmware;
 mod global_definition;
