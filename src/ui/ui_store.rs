@@ -1,73 +1,104 @@
 use crate::{
-    global_definition::{CargoDependency, Template},
+    global_definition::{CargoDependency, SourceTemplate},
     ui::ui_definition::NodeDependency,
 };
 
 macro_rules! ui_template {
     ($path:literal) => {
-        Template {
+        SourceTemplate {
             name: $path,
-            source_path: concat!(
-                "https://raw.githubusercontent.com/Adeun-Ilemobola/Pinora_Templat/main/UI_Templates/",
+            github_source_url: concat!(
+                "https://raw.githubusercontent.com/Adeun-Ilemobola/Pinora_Templat/feat/electrobun-architecture/UI_Templates/",
                 $path
             ),
             output_path: $path,
+            edits: &[],
+        }
+    };
+    ($path:literal, $( $edit:expr ),+ $(,)?) => {
+        SourceTemplate {
+            name: $path,
+            github_source_url: concat!(
+                "https://raw.githubusercontent.com/Adeun-Ilemobola/Pinora_Templat/feat/electrobun-architecture/UI_Templates/",
+                $path
+            ),
+            output_path: $path,
+            edits: &[
+                $( $edit ),+
+            ],
         }
     };
 }
 
-pub static UI_TEMPLATE_LIST: [Template; 39] = [
-    ui_template!("vite.config.ts"),
-    ui_template!("tsconfig.node.json"),
-    ui_template!("tsconfig.json"),
+pub static UI_TEMPLATE_LIST: [SourceTemplate; 68] = [
+    ui_template!(".gitignore"),
+    ui_template!("README.md"),
+    ui_template!("bun.lock"),
     ui_template!("components.json"),
-    ui_template!("src/main.tsx"),
-    ui_template!("src/Layout.tsx"),
-    ui_template!("src/App.css"),
-
-    ui_template!("src/components/Modules/ModuleCore.tsx"),
-    ui_template!("src/components/Modules/ButtonModule.tsx"),
-    ui_template!("src/components/Modules/led.tsx"),
-
-    // ui_template!("src/components/Modules/Rangefinder.tsx"),
-    // ui_template!("src/components/Modules/Servo.tsx"),
-    // ui_template!("src/components/Grid.tsx"),
-
-    ui_template!("src/components/LogFrame.tsx"),
-    ui_template!("src/components/PortInput.tsx"),
-    ui_template!("src/components/theme-provider.tsx"),
-    ui_template!("src/hooks/use-mobile.ts"),
-    ui_template!("src/lib/Modules/BUTTON.ts"),
-    ui_template!("src/lib/Modules/LED.ts"),
-
-    // ui_template!("src/lib/Modules/LEDCLUSTER.ts"),
-    // ui_template!("src/lib/Modules/LIDAR.ts"),
-    // ui_template!("src/lib/Modules/RANGEFINDER.ts"),
-    // ui_template!("src/lib/Modules/SERVO.ts"),
-    
-    ui_template!("src/lib/ListenStore.ts"),
-    ui_template!("src/lib/logging.ts"),
-    ui_template!("src/lib/ModuleCommand.ts"),
-    ui_template!("src/lib/ModuleDefinitionSchema.ts"),
-    ui_template!("src/lib/ModuleEven.ts"),
-    ui_template!("src/lib/ModuleStore.ts"),
-    ui_template!("src/lib/utils.ts"),
-    ui_template!("src/page/App.tsx"),
-    ui_template!("src/page/Dashboard.tsx"),
-    ui_template!("src/page/Devices.tsx"),
-    ui_template!("src/page/Logs.tsx"),
-    ui_template!("src/page/NotFound.tsx"),
-    ui_template!("src/page/PortSettings.tsx"),
-    ui_template!("src-tauri/src/protocol/command.rs"),
-    ui_template!("src-tauri/src/protocol/global_definition_protocol.rs"),
-    ui_template!("src-tauri/src/protocol/mod.rs"),
-    ui_template!("src-tauri/src/protocol/module_event.rs"),
-    ui_template!("src-tauri/src/protocol/registration.rs"),
-    ui_template!("src-tauri/src/shared_types/mod.rs"),
-    ui_template!("src-tauri/src/shared_types/state.rs"),
-    ui_template!("src-tauri/src/global_definition.rs"),
-    ui_template!("src-tauri/src/lib.rs"),
-    ui_template!("src-tauri/src/main.rs"),
+    ui_template!("electrobun.config.ts"),
+    ui_template!("llms.txt"),
+    ui_template!("package.json"),
+    ui_template!("src/Runtime/ModuleStore.ts"),
+    ui_template!("src/bun/index.ts"),
+    ui_template!("src/mainview/App.tsx"),
+    ui_template!("src/mainview/Modules/IMU/definition.ts"),
+    ui_template!("src/mainview/Modules/IMU/view.tsx"),
+    ui_template!("src/mainview/Modules/Lidar/definition.ts"),
+    ui_template!("src/mainview/Modules/Lidar/view.tsx"),
+    ui_template!("src/mainview/Modules/button/definition.ts"),
+    ui_template!("src/mainview/Modules/button/view.tsx"),
+    ui_template!("src/mainview/Modules/led/definition.ts"),
+    ui_template!("src/mainview/Modules/led/view.tsx"),
+    ui_template!("src/mainview/Modules/rangefinder/definition.ts"),
+    ui_template!("src/mainview/Modules/rangefinder/view.tsx"),
+    ui_template!("src/mainview/Modules/servo/definition.ts"),
+    ui_template!("src/mainview/Modules/servo/view.tsx"),
+    ui_template!("src/mainview/Modules/stepper/definition.ts"),
+    ui_template!("src/mainview/Modules/stepper/view.tsx"),
+    ui_template!("src/mainview/Pages/logs.tsx"),
+    ui_template!("src/mainview/components/Grid.tsx"),
+    ui_template!("src/mainview/components/ModuleCore.tsx"),
+    ui_template!("src/mainview/components/PointInput.tsx"),
+    ui_template!("src/mainview/components/app-sidebar.tsx"),
+    ui_template!("src/mainview/components/ui/avatar.tsx"),
+    ui_template!("src/mainview/components/ui/badge.tsx"),
+    ui_template!("src/mainview/components/ui/button.tsx"),
+    ui_template!("src/mainview/components/ui/card.tsx"),
+    ui_template!("src/mainview/components/ui/collapsible.tsx"),
+    ui_template!("src/mainview/components/ui/command.tsx"),
+    ui_template!("src/mainview/components/ui/dialog.tsx"),
+    ui_template!("src/mainview/components/ui/dropdown-menu.tsx"),
+    ui_template!("src/mainview/components/ui/input-group.tsx"),
+    ui_template!("src/mainview/components/ui/input.tsx"),
+    ui_template!("src/mainview/components/ui/label.tsx"),
+    ui_template!("src/mainview/components/ui/progress.tsx"),
+    ui_template!("src/mainview/components/ui/select.tsx"),
+    ui_template!("src/mainview/components/ui/separator.tsx"),
+    ui_template!("src/mainview/components/ui/sheet.tsx"),
+    ui_template!("src/mainview/components/ui/sidebar.tsx"),
+    ui_template!("src/mainview/components/ui/skeleton.tsx"),
+    ui_template!("src/mainview/components/ui/slider.tsx"),
+    ui_template!("src/mainview/components/ui/sonner.tsx"),
+    ui_template!("src/mainview/components/ui/table.tsx"),
+    ui_template!("src/mainview/components/ui/tabs.tsx"),
+    ui_template!("src/mainview/components/ui/textarea.tsx"),
+    ui_template!("src/mainview/components/ui/tooltip.tsx"),
+    ui_template!("src/mainview/electrobun.ts"),
+    ui_template!("src/mainview/hooks/use-mobile.ts"),
+    ui_template!("src/mainview/index.css"),
+    ui_template!("src/mainview/index.html"),
+    ui_template!("src/mainview/lib/Layout.tsx"),
+    ui_template!("src/mainview/lib/utils.ts"),
+    ui_template!("src/mainview/main.tsx"),
+    ui_template!("src/serial-test.ts"),
+    ui_template!("src/serial-worker.ts"),
+    ui_template!("src/shared/Protocol/ModuleCommand.ts"),
+    ui_template!("src/shared/Protocol/ModuleDefinitionSchema.ts"),
+    ui_template!("src/shared/Protocol/ModuleEven.ts"),
+    ui_template!("src/shared/rpc.ts"),
+    ui_template!("src/types/bun-serialport.d.ts"),
+    ui_template!("tsconfig.json"),
+    ui_template!("vite.config.ts"),
 ];
 
 pub static UI_DEPENDENCY_LIST: [NodeDependency; 35] = [
@@ -176,3 +207,6 @@ pub static TAURI_DEPENDENCY_LIST: [CargoDependency; 7] = [
         features: &[],
     },
 ];
+
+
+

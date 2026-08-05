@@ -16,6 +16,32 @@ pub  struct  Template {
     // pub replacement: &'static str
 }
 
+pub struct SourceTemplate {
+    pub name: &'static str,
+    pub github_source_url: &'static str,
+    pub output_path: &'static str,
+    pub edits: &'static [TemplateEdit],
+}
+
+pub enum TemplateEdit {
+    Replace {
+        // target: &'static str,
+        replacement: TemplateValue,
+    },
+    InsertAfter {
+        target: &'static str,
+        content: TemplateValue,
+        new_line:bool
+    },
+}
+
+pub enum TemplateValue {
+    Literal(&'static str),
+    ProjectName,
+    FirmwarePath,
+    UiPath,
+}
+
 #[derive(Serialize, Deserialize, Debug)]
 pub struct GitHubItem {
     pub name: String,

@@ -1,4 +1,4 @@
-use crate::commands::root::{ROOT_TEMPLATE_LIST, root_toml_file};
+use crate::commands::root::{NEW_ROOT_TEMPLATE_LIST,  root_toml_file};
 use crate::firmware::firmware_definition::ESP_FOLDER_NAME;
 use crate::firmware::firmware_store::{FIRMWARE_DEPENDENCY_LIST, FIRMWARE_TEMPLATE_LIST};
 use crate::global_definition::{LogType, ProjectConfig};
@@ -11,11 +11,12 @@ use crate::ui::ui_store::{
     SHADCN_COMPONENT_LIST, TAURI_DEPENDENCY_LIST, UI_DEPENDENCY_LIST, UI_TEMPLATE_LIST,
 };
 use crate::utility::{
-    add_dependency, add_node_dependencies, add_shadcn_components, download_file, edit_toml_file, log, node_dependency_steps
+    add_dependency, add_node_dependencies, add_shadcn_components, download_file, generate_file, log, node_dependency_steps
 };
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use anyhow::Error;
 use uuid::Uuid;
 
 pub async fn pre_create(input: &Vec<String>) {
@@ -86,269 +87,254 @@ pub async fn pre_create(input: &Vec<String>) {
         return;
     }
 
-    task.step("Setting up firmware");
-    let Some(mut config) = create_firmware(&root_dir, &project_name).await else {
-        task.fail(format!(
-            "Firmware setup failed, so '{}' was not created",
-            project_name
-        ));
-        return;
-    };
 
-    task.step("Setting up UI");
-    if !create_ui(&root_dir, &mut config).await {
-        task.fail(format!(
-            "UI setup failed, so '{}' is incomplete",
-            project_name
-        ));
-        return;
-    }
+   let new_congif =match create_root_files(&root_dir, &project_name).await {
+       Ok(data)=>data,
+        Err(_s) => return,
+       
+   };
 
-    if !create_root_files(&root_dir, &project_name).await {
-        task.fail(format!(
-            "Root file setup failed, so '{}' is incomplete",
-            project_name
-        ));
-        return;
-    }
+    // task.step("Setting up firmware");
+    // let Some(mut config) = create_firmware(&root_dir, &project_name).await else {
+    //     task.fail(format!(
+    //         "Firmware setup failed, so '{}' was not created",
+    //         project_name
+    //     ));
+    //     return;
+    // };
 
-    task.step_with("Saving project config", ".espConfig/esp_config.json");
-    if save_config(&root_dir, &config).is_none() {
-        task.fail("Could not write the project config file");
-        return;
-    }
-    save_project_to_database(&config);
+    // task.step("Setting up UI");
+    // if !create_ui(&root_dir, &mut config).await {
+    //     task.fail(format!(
+    //         "UI setup failed, so '{}' is incomplete",
+    //         project_name
+    //     ));
+    //     return;
+    // }
 
-    task.Complete(format!(
-        "Project '{}' is ready at {}",
-        config.project_name,
-        root_dir.display()
-    ));
+
+
+    // task.step_with("Saving project config", ".espConfig/esp_config.json");
+    // if save_config(&root_dir, &config).is_none() {
+    //     task.fail("Could not write the project config file");
+    //     return;
+    // }
+    // save_project_to_database(&config);
+
+    // task.Complete(format!(
+    //     "Project '{}' is ready at {}",
+    //     config.project_name,
+    //     root_dir.display()
+    // ));
 }
 
-async fn create_root_files(root_dir: &Path, project_name: &str) -> bool {
-    for file in ROOT_TEMPLATE_LIST.iter() {
-        let output_path = root_dir.join(file.output_path);
-        if let Some(parent) = output_path.parent() {
-            if let Err(error) = fs::create_dir_all(parent) {
-                log(
-                    &format!(
-                        "Could not create root template directory {}: {}",
-                        parent.display(),
-                        error
-                    ),
-                    "Create",
-                    LogType::Error,
-                );
-                return false;
-            }
-        }
+async fn create_root_files(root_dir: &Path, project_name: &str) -> Result<ProjectConfig ,()> {
 
-        if let Err(error) = download_file(file.source_path, &output_path).await {
-            log(
-                &format!("Could not download root template {}: {}", file.name, error),
-                "Create",
-                LogType::Error,
-            );
-            return false;
-        }
-    }
-
-    let toml = root_toml_file!(project_name, ESP_FOLDER_NAME, UI_FOLDER_NAME);
-    let toml_path = root_dir.join("pinora.toml");
-    if let Err(error) = fs::write(&toml_path, toml) {
-        log(
-            &format!("Could not write {}: {}", toml_path.display(), error),
-            "Create",
-            LogType::Error,
-        );
-        return false;
-    }
-
-    true
-}
-
-/// Scaffolds the ESP firmware crate: cargo generate, then the template files, then the crates.
-async fn create_firmware(root_dir: &Path, project_name: &str) -> Option<ProjectConfig> {
-    let firmware_dir = root_dir.join(ESP_FOLDER_NAME);
-    let total = 1 + FIRMWARE_TEMPLATE_LIST.len() as u32 + FIRMWARE_DEPENDENCY_LIST.len() as u32;
-    let mut task = ProgressTask::start(
-        "firmware",
-        total,
-        format!("Setting up firmware in {}", firmware_dir.display()),
-    );
-
-    if firmware_dir.exists() {
-        task.fail(format!(
-            "Firmware directory already exists: {}",
-            firmware_dir.display()
-        ));
-        return None;
-    }
-
-    task.step_with(
-        "Generating ESP-IDF project",
-        "cargo generate esp-rs/esp-idf-template",
-    );
-    let status = Command::new("cargo")
-        .current_dir(root_dir)
-        .arg("generate")
-        .arg("esp-rs/esp-idf-template")
-        .arg("cargo")
-        .arg("--name")
-        .arg(ESP_FOLDER_NAME)
-        .arg("-d")
-        .arg("mcu=esp32")
-        .arg("-d")
-        .arg("advanced=false")
-        .status();
-
-    match status {
-        Ok(status) if status.success() => {}
-        Ok(status) => {
-            task.fail(format!("cargo generate failed ({})", status));
-            return None;
-        }
-        Err(error) => {
-            task.fail(format!("Could not run cargo generate: {}", error));
-            return None;
-        }
-    }
-
-    for file in FIRMWARE_TEMPLATE_LIST.iter() {
-        task.step_with("Downloading firmware template", file.name);
-        // let output_path = firmware_dir.join(file.output_path);
-        if let Err(error) = download_file(file.source_path, &firmware_dir).await {
-            task.fail(format!("Could not download {}: {}", file.name, error));
-            return None;
-        }
-    }
-
-    let firmware_path = firmware_dir.display().to_string();
-    for dep in FIRMWARE_DEPENDENCY_LIST.iter() {
-        if let Err(error) = add_dependency(&firmware_path, dep, &mut task) {
-            task.fail(error.to_string());
-            return None;
-        }
-    }
-    let firmware_tomil_file = firmware_dir.join("Cargo.toml");
-    let target = "[dependencies]";
-    let new_content: &str = r#"pinora-shared = { path = ".." }"#;
-    match edit_toml_file(firmware_tomil_file, target, new_content) {
-        Ok(_) => {}
-        Err(error) => {
-            task.fail(format!(
-                "Could not update the firmware Cargo.toml: {}",
-                error
-            ));
-            return None;
-        }
-    };
-
-    task.finish(format!("Firmware ready at {}", firmware_dir.display()));
-
-    let mut temp_config = ProjectConfig {
+    let  temp_config = ProjectConfig {
         project_name: project_name.to_string(),
-        firmware_path,
-        ui_path: String::new(),
+        firmware_path:format!("{}/{}" , ESP_FOLDER_NAME , project_name),
+        ui_path: format!("{}/{}" , UI_FOLDER_NAME , project_name),
         id: Uuid::new_v4().to_string(),
-        build_command: "source ~/export-esp.sh && cargo build".to_string(),
-        flash_command: "cargo flash --monitor --port /dev/ttyUSB0".to_string(),
+        build_command: "just frontend".to_string(),
+        flash_command: "just flash".to_string(),
         install_components: Vec::new(),
     };
-    temp_config.install_components.push("led".to_string());
-    temp_config.install_components.push("button".to_string());
+    for item in NEW_ROOT_TEMPLATE_LIST.iter() {
+        match generate_file(item, root_dir, &temp_config).await {
+            Ok(_)=>{},
+            Err(_x)=> return  Err(())
+        }
+    }
 
-    Some(temp_config)
+    Ok(temp_config)
 }
 
-/// Scaffolds the Tauri UI: bun create, then the Rust side crates, the template files, the node
-/// packages and the shadcn components.
-pub async fn create_ui(root_dir: &Path, config: &mut ProjectConfig) -> bool {
-    let ui_dir = root_dir.join(UI_FOLDER_NAME);
-    let total = 1
-        + TAURI_DEPENDENCY_LIST.len() as u32
-        + UI_TEMPLATE_LIST.len() as u32
-        + node_dependency_steps(&UI_DEPENDENCY_LIST)
-        + 1;
-    let mut task = ProgressTask::start(
-        "ui",
-        total,
-        format!("Setting up UI in {}", ui_dir.display()),
-    );
 
-    task.step_with(
-        "Creating Tauri app",
-        "bun create tauri-app --template react-ts",
-    );
-    let status = Command::new("bun")
-        .current_dir(root_dir)
-        .arg("create")
-        .arg("tauri-app")
-        .arg(UI_FOLDER_NAME)
-        .arg("--template")
-        .arg("react-ts")
-        .arg("--manager")
-        .arg("bun")
-        .arg("--yes")
-        .status();
 
-    match status {
-        Ok(status) if status.success() => {}
-        Ok(status) => {
-            task.fail(format!("bun create tauri-app failed ({})", status));
-            return false;
-        }
-        Err(error) => {
-            task.fail(format!("Could not run bun create tauri-app: {}", error));
-            return false;
-        }
-    }
+// async fn create_firmware(root_dir: &Path, project_name: &str) -> Option<ProjectConfig> {
+//     let firmware_dir = root_dir.join(ESP_FOLDER_NAME);
+//     let total = 1 + FIRMWARE_TEMPLATE_LIST.len() as u32 + FIRMWARE_DEPENDENCY_LIST.len() as u32;
+//     let mut task = ProgressTask::start(
+//         "firmware",
+//         total,
+//         format!("Setting up firmware in {}", firmware_dir.display()),
+//     );
 
-    let src_tauri_path = ui_dir.join("src-tauri").display().to_string();
-    for dep in TAURI_DEPENDENCY_LIST.iter() {
-        if let Err(error) = add_dependency(&src_tauri_path, dep, &mut task) {
-            task.fail(error.to_string());
-            return false;
-        }
-    }
+//     if firmware_dir.exists() {
+//         task.fail(format!(
+//             "Firmware directory already exists: {}",
+//             firmware_dir.display()
+//         ));
+//         return None;
+//     }
 
-    let ui_toml_file = ui_dir.join("src-tauri").join("Cargo.toml");
-    let target = "[dependencies]";
-    let new_content = r#"pinora-shared = { path = "../.." }"#;
-    match edit_toml_file(ui_toml_file, target, new_content) {
-        Ok(_) => {}
-        Err(error) => {
-            task.fail(format!("Could not update the UI Cargo.toml: {}", error));
-            return false;
-        }
-    };
+//     task.step_with(
+//         "Generating ESP-IDF project",
+//         "cargo generate esp-rs/esp-idf-template",
+//     );
+//     let status = Command::new("cargo")
+//         .current_dir(root_dir)
+//         .arg("generate")
+//         .arg("esp-rs/esp-idf-template")
+//         .arg("cargo")
+//         .arg("--name")
+//         .arg(ESP_FOLDER_NAME)
+//         .arg("-d")
+//         .arg("mcu=esp32")
+//         .arg("-d")
+//         .arg("advanced=false")
+//         .status();
 
-    for file in UI_TEMPLATE_LIST.iter() {
-        task.step_with("Downloading UI template", file.name);
-        let output_path = ui_dir.join(file.output_path.trim_start_matches('/'));
+//     match status {
+//         Ok(status) if status.success() => {}
+//         Ok(status) => {
+//             task.fail(format!("cargo generate failed ({})", status));
+//             return None;
+//         }
+//         Err(error) => {
+//             task.fail(format!("Could not run cargo generate: {}", error));
+//             return None;
+//         }
+//     }
 
-        if let Err(error) = download_file(file.source_path, &output_path).await {
-            task.fail(format!("Could not download {}: {}", file.name, error));
-            return false;
-        }
-        if !tokio::fs::try_exists(&output_path).await.unwrap_or(false) {
-            task.fail(format!("Template file '{}' was not written", file.name));
-            return false;
-        }
-    }
+//     for file in FIRMWARE_TEMPLATE_LIST.iter() {
+//         task.step_with("Downloading firmware template", file.name);
+//         // let output_path = firmware_dir.join(file.output_path);
+//         if let Err(error) = download_file(file.source_path, &firmware_dir).await {
+//             task.fail(format!("Could not download {}: {}", file.name, error));
+//             return None;
+//         }
+//     }
 
-    if let Err(error) = add_node_dependencies(&ui_dir, &UI_DEPENDENCY_LIST, &mut task) {
-        task.fail(error.to_string());
-        return false;
-    }
+//     let firmware_path = firmware_dir.display().to_string();
+//     for dep in FIRMWARE_DEPENDENCY_LIST.iter() {
+//         if let Err(error) = add_dependency(&firmware_path, dep, &mut task) {
+//             task.fail(error.to_string());
+//             return None;
+//         }
+//     }
+//     let firmware_tomil_file = firmware_dir.join("Cargo.toml");
+//     let target = "[dependencies]";
+//     let new_content: &str = r#"pinora-shared = { path = ".." }"#;
+//     match edit_toml_file(firmware_tomil_file, target, new_content) {
+//         Ok(_) => {}
+//         Err(error) => {
+//             task.fail(format!(
+//                 "Could not update the firmware Cargo.toml: {}",
+//                 error
+//             ));
+//             return None;
+//         }
+//     };
 
-    if let Err(error) = add_shadcn_components(&ui_dir, &SHADCN_COMPONENT_LIST, &mut task) {
-        task.fail(error.to_string());
-        return false;
-    }
+//     task.finish(format!("Firmware ready at {}", firmware_dir.display()));
 
-    config.ui_path = ui_dir.display().to_string();
-    task.finish(format!("UI ready at {}", ui_dir.display()));
-    true
-}
+//     let mut temp_config = ProjectConfig {
+//         project_name: project_name.to_string(),
+//         firmware_path,
+//         ui_path: String::new(),
+//         id: Uuid::new_v4().to_string(),
+//         build_command: "source ~/export-esp.sh && cargo build".to_string(),
+//         flash_command: "cargo flash --monitor --port /dev/ttyUSB0".to_string(),
+//         install_components: Vec::new(),
+//     };
+//     temp_config.install_components.push("led".to_string());
+//     temp_config.install_components.push("button".to_string());
+
+//     Some(temp_config)
+// }
+
+
+
+
+
+
+
+// pub async fn create_ui(root_dir: &Path, config: &mut ProjectConfig) -> bool {
+//     let ui_dir = root_dir.join(UI_FOLDER_NAME);
+//     let total = 1
+//         + TAURI_DEPENDENCY_LIST.len() as u32
+//         + UI_TEMPLATE_LIST.len() as u32
+//         + node_dependency_steps(&UI_DEPENDENCY_LIST)
+//         + 1;
+//     let mut task = ProgressTask::start(
+//         "ui",
+//         total,
+//         format!("Setting up UI in {}", ui_dir.display()),
+//     );
+
+//     task.step_with(
+//         "Creating Tauri app",
+//         "bun create tauri-app --template react-ts",
+//     );
+//     let status = Command::new("bun")
+//         .current_dir(root_dir)
+//         .arg("create")
+//         .arg("tauri-app")
+//         .arg(UI_FOLDER_NAME)
+//         .arg("--template")
+//         .arg("react-ts")
+//         .arg("--manager")
+//         .arg("bun")
+//         .arg("--yes")
+//         .status();
+
+//     match status {
+//         Ok(status) if status.success() => {}
+//         Ok(status) => {
+//             task.fail(format!("bun create tauri-app failed ({})", status));
+//             return false;
+//         }
+//         Err(error) => {
+//             task.fail(format!("Could not run bun create tauri-app: {}", error));
+//             return false;
+//         }
+//     }
+
+//     let src_tauri_path = ui_dir.join("src-tauri").display().to_string();
+//     for dep in TAURI_DEPENDENCY_LIST.iter() {
+//         if let Err(error) = add_dependency(&src_tauri_path, dep, &mut task) {
+//             task.fail(error.to_string());
+//             return false;
+//         }
+//     }
+
+//     let ui_toml_file = ui_dir.join("src-tauri").join("Cargo.toml");
+//     let target = "[dependencies]";
+//     let new_content = r#"pinora-shared = { path = "../.." }"#;
+//     match edit_toml_file(ui_toml_file, target, new_content) {
+//         Ok(_) => {}
+//         Err(error) => {
+//             task.fail(format!("Could not update the UI Cargo.toml: {}", error));
+//             return false;
+//         }
+//     };
+
+//     for file in UI_TEMPLATE_LIST.iter() {
+//         task.step_with("Downloading UI template", file.name);
+//         let output_path = ui_dir.join(file.output_path.trim_start_matches('/'));
+
+//         if let Err(error) = download_file(file.source_path, &output_path).await {
+//             task.fail(format!("Could not download {}: {}", file.name, error));
+//             return false;
+//         }
+//         if !tokio::fs::try_exists(&output_path).await.unwrap_or(false) {
+//             task.fail(format!("Template file '{}' was not written", file.name));
+//             return false;
+//         }
+//     }
+
+//     if let Err(error) = add_node_dependencies(&ui_dir, &UI_DEPENDENCY_LIST, &mut task) {
+//         task.fail(error.to_string());
+//         return false;
+//     }
+
+//     if let Err(error) = add_shadcn_components(&ui_dir, &SHADCN_COMPONENT_LIST, &mut task) {
+//         task.fail(error.to_string());
+//         return false;
+//     }
+
+//     config.ui_path = ui_dir.display().to_string();
+//     task.finish(format!("UI ready at {}", ui_dir.display()));
+//     true
+// }
