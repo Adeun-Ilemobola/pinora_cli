@@ -2,19 +2,6 @@ use serde::{Deserialize, Serialize};
 
 pub static BRANCH_NAME: &str = "v0"; 
 
-pub  struct  CargoDependency {
-    pub name: &'static str,
-    pub version: &'static str,
-     pub features: &'static [&'static str]
-}
-
-pub  struct  Template {
-    pub name: &'static str,
-    pub source_path: &'static str,
-    pub output_path: &'static str,
-    // pub swap:bool,
-    // pub replacement: &'static str
-}
 
 pub struct SourceTemplate {
     pub name: &'static str,

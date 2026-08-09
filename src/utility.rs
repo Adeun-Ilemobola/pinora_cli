@@ -1,13 +1,12 @@
 use crate::global_definition::{
-    CargoDependency, LogType, ProjectConfig, SourceTemplate, TemplateEdit, TemplateValue,
+    LogType, ProjectConfig, SourceTemplate, TemplateEdit, TemplateValue,
 };
-use crate::progress::ProgressTask;
-use crate::ui::ui_definition::NodeDependency;
+
 use anyhow::{Context, Result};
 use std::fs;
 use std::io::{self, Write};
-use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::path::{Path};
+
 
 pub async fn download_file(git_url: &str, output_path: &Path) -> Result<()> {
     let content = reqwest::get(git_url).await?.text().await?;
@@ -18,9 +17,7 @@ pub async fn download_file(git_url: &str, output_path: &Path) -> Result<()> {
     Ok(())
 }
 
-/// Messages with no task behind them: CLI usage errors, and warnings that are worth showing but
-/// are not a step and not a failure. Anything belonging to a task goes on a [`ProgressTask`].
-/// Goes to stderr so stdout stays a clean protocol channel.
+
 pub fn log(message: &str, milestone: &str, lt: LogType) {
     let label = match lt {
         LogType::Info => "INFO",
@@ -99,111 +96,6 @@ pub fn select_serial_port() -> Option<String> {
     Some(ports[selected - 1].clone())
 }
 
-pub fn add_dependency(
-    project_path: &str,
-    dep: &CargoDependency,
-    task: &mut ProgressTask,
-) -> io::Result<()> {
-    let package = format!("{}@{}", dep.name, dep.version);
-    task.step_with(
-        format!("Adding crate '{}'", dep.name),
-        format!("cargo add {}", package),
-    );
-
-    let mut command = Command::new("cargo");
-    command.current_dir(project_path).arg("add").arg(&package);
-    for feature in dep.features {
-        command.arg("--features").arg(feature);
-    }
-
-    let status = command.status()?;
-    if status.success() {
-        return Ok(());
-    }
-
-    Err(io::Error::other(format!(
-        "cargo add {} failed ({})",
-        package, status
-    )))
-}
-
-/// One `bun add` per batch, since dev and runtime packages need different flags.
-pub fn add_node_dependencies(
-    project_path: &Path,
-    deps: &[NodeDependency],
-    task: &mut ProgressTask,
-) -> io::Result<()> {
-    for is_dev in [false, true] {
-        let packages: Vec<String> = deps
-            .iter()
-            .filter(|dep| dep.dev == is_dev)
-            .map(|dep| format!("{}@{}", dep.name, dep.version))
-            .collect();
-
-        if packages.is_empty() {
-            continue;
-        }
-
-        let kind = if is_dev { "dev" } else { "runtime" };
-        task.step_with(
-            format!("Installing {} {} package(s) with bun", packages.len(), kind),
-            packages.join(", "),
-        );
-
-        let mut command = Command::new("bun");
-        command.current_dir(project_path).arg("add");
-        if is_dev {
-            command.arg("--dev");
-        }
-        command.args(&packages);
-
-        let status = command.status()?;
-        if !status.success() {
-            return Err(io::Error::other(format!(
-                "bun add failed for {} packages ({})",
-                kind, status
-            )));
-        }
-    }
-
-    Ok(())
-}
-
-/// The number of steps [`add_node_dependencies`] will report, so the caller's total lines up.
-pub fn node_dependency_steps(deps: &[NodeDependency]) -> u32 {
-    let runtime = deps.iter().any(|dep| !dep.dev) as u32;
-    let dev = deps.iter().any(|dep| dep.dev) as u32;
-    runtime + dev
-}
-
-pub fn add_shadcn_components(
-    project_path: &Path,
-    components: &[&str],
-    task: &mut ProgressTask,
-) -> io::Result<()> {
-    task.step_with(
-        format!("Adding {} shadcn component(s)", components.len()),
-        components.join(", "),
-    );
-
-    // The template's components.json is already in place, so the CLI skips init and honours
-    // its style/baseColor. `bunx` resolves the shadcn version pinned in package.json.
-    let mut command = Command::new("bunx");
-    command
-        .current_dir(project_path)
-        .arg("--bun")
-        .arg("shadcn")
-        .arg("add")
-        .args(components)
-        .arg("--yes");
-
-    let status = command.status()?;
-    if status.success() {
-        return Ok(());
-    }
-
-    Err(io::Error::other(format!("shadcn add failed ({})", status)))
-}
 
 pub fn file_change(file: &Path, target: &str, new_content: &str, is_new_line: bool) -> Result<()> {
     if !file.is_file() {
@@ -212,13 +104,10 @@ pub fn file_change(file: &Path, target: &str, new_content: &str, is_new_line: bo
 
     let content =
         fs::read_to_string(&file).with_context(|| format!("Failed to read {}", file.display()))?;
-
-   
-
     if is_new_line {
-         let target_position = content
-        .find(target)
-        .with_context(|| format!("Target {target:?} was not found in {}", file.display()))?;
+        let target_position = content
+            .find(target)
+            .with_context(|| format!("Target {target:?} was not found in {}", file.display()))?;
         let insertion_position = target_position + target.len();
         let (before, after) = content.split_at(insertion_position);
 
@@ -229,21 +118,7 @@ pub fn file_change(file: &Path, target: &str, new_content: &str, is_new_line: bo
 
         return Ok(());
     }
-    println!("target:{}" , target);
-     println!("----------------------------------------------------------------------------------------");
-     println!("new_content:{}" , new_content);
-    println!("----------------------------------------------------------------------------------------");
-
-      println!("is_new_line:{}" , is_new_line);
-    println!("----------------------------------------------------------------------------------------");
-
-    println!("content:{}\n" , content);
-
-         println!("----------------------------------------------------------------------------------------");
-
-
-    let data = content.replacen(target, &new_content , 1);
-    println!("update content:{} \n" , data);
+    let data = content.replacen(target, &new_content, 1);
     fs::write(&file, data).with_context(|| format!("Failed to write {}", file.display()))?;
 
     Ok(())

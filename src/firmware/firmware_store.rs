@@ -1,4 +1,4 @@
-use crate::global_definition::{CargoDependency, SourceTemplate};
+use crate::global_definition::{SourceTemplate};
 
 macro_rules! firmware_template {
     ($path:literal) => {
@@ -14,68 +14,11 @@ macro_rules! firmware_template {
     };
 }
 
-pub static FIRMWARE_DEPENDENCY_LIST: [CargoDependency; 11] = [
-    CargoDependency {
-        name: "anyhow",
-        version: "1.0.104",
-        features: &[],
-    },
-    CargoDependency {
-        name: "serde",
-        version: "1.0.229",
-        features: &["derive"],
-    },
-    CargoDependency {
-        name: "serde_json",
-        version: "1.0.150",
-        features: &[],
-    },
-    CargoDependency {
-        name: "log",
-        version: "0.4.33",
-        features: &[],
-    },
-    CargoDependency {
-        name: "pwm-pca9685",
-        version: "1.0.0",
-        features: &[],
-    },
-    CargoDependency {
-        name: "uuid",
-        version: "1.24.0",
-        features: &["v4"],
-    },
-    CargoDependency {
-        name: "esp-idf-svc",
-        version: "0.52.1",
-        features: &["critical-section", "embassy-time-driver", "embassy-sync"],
-    },
-    CargoDependency {
-        name: "embedded-hal-bus",
-        version: "0.3",
-        features: &["std"],
-    },
-    CargoDependency {
-        name: "embedded-hal-compat",
-        version: "0.13",
-        features: &[],
-    },
-    CargoDependency {
-        name: "embassy-time",
-        version: "0.5",
-        features: &["generic-queue-8"],
-    },
-    CargoDependency {
-        name: "vl53l1x-uld",
-        version: "2.0.1",
-        features: &[],
-    },
-];
 
-pub static FIRMWARE_TEMPLATE_LIST: [SourceTemplate; 31] = [
+pub static FIRMWARE_TEMPLATE_LIST: [SourceTemplate; 30] = [
     firmware_template!(".cargo/config.toml"),
     firmware_template!(".vscode/settings.json"),
-    firmware_template!("Cargo.lock"),
+    // firmware_template!("Cargo.lock"),
     firmware_template!("Cargo.toml"),
     firmware_template!("build.rs"),
     firmware_template!("pre-script.rhai"),

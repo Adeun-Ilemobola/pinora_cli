@@ -1,8 +1,10 @@
 # Pinora CLI
 
-Pinora CLI is a Rust-based scaffolding and project-management tool for creating ESP32 applications with a Rust firmware backend and a Tauri + React desktop interface.
+Pinora CLI is a Rust-based project generator and management tool for building complete ESP32 systems with Rust firmware and a dedicated desktop interface.
 
-It automates the repetitive setup work around generating an ESP-IDF firmware crate, creating a Tauri UI, installing dependencies, applying Pinora templates, recording project configuration, building firmware, flashing devices, and installing reusable hardware components.
+Pinora is self-contained. It does not depend on Starboard or on a separate scaffolding application. The CLI creates the firmware, desktop UI, project metadata, and shared project commands that make up a Pinora project.
+
+The firmware started from the official `esp-rs/esp-idf-template`, but has since evolved into Pinora's own firmware architecture. The desktop UI is likewise a heavily customized Electrobun application built with React and TypeScript rather than a stock starter or an external companion app.
 
 > **Status:** Pinora CLI is in active early development. The current release is `0.1.0`, and commands, generated files, and project configuration may still change.
 
@@ -12,10 +14,10 @@ A new project is generated with two main folders:
 
 ```text
 <project-name>/
-├── Firmware/   # Rust ESP-IDF firmware
-├── UI/         # Tauri + React + TypeScript desktop app
-└── .espConfig/
-    └── esp_config.json
+├── Firmware/     # Pinora Rust + ESP-IDF firmware
+├── UI/           # Pinora Electrobun + React + TypeScript desktop app
+├── justfile      # Shared firmware and UI workflows
+└── pinora.toml   # Project metadata
 ```
 
 Pinora also stores a lightweight list of known projects in the user's home directory:
@@ -26,11 +28,11 @@ Pinora also stores a lightweight list of known projects in the user's home direc
 
 ## Current Features
 
-- Create a complete Rust ESP32 + Tauri project
-- Generate firmware from the official `esp-rs/esp-idf-template`
-- Generate a React + TypeScript Tauri application with Bun
-- Download and apply Pinora firmware and UI template files
-- Install required Rust, frontend, and shadcn dependencies
+- Create a complete Pinora ESP32 project without an external scaffolding system
+- Generate Pinora firmware derived from the official `esp-rs/esp-idf-template`
+- Generate Pinora's custom Electrobun, React, and TypeScript desktop UI
+- Install the root project commands and metadata shared by the firmware and UI
+- Download the maintained Pinora firmware and UI source files
 - Save project paths, IDs, build commands, and installed components
 - Build firmware from the project root
 - Detect available serial ports
@@ -38,6 +40,24 @@ Pinora also stores a lightweight list of known projects in the user's home direc
 - List hardware components from the remote component registry
 - Download and register components in an existing firmware project
 - Emit structured progress information for long-running operations
+
+## Firmware Architecture
+
+Pinora firmware is built on Rust and ESP-IDF. Its original foundation came from the official `esp-rs/esp-idf-template`, which provides the ESP-IDF Rust toolchain and build integration. Pinora now layers its own architecture on top of that foundation, including:
+
+- hardware and module abstractions
+- built-in modules for common sensors and actuators
+- command, event, registration, and shared protocol types
+- Pinora-specific logging and utility code
+- project-level build and flash workflows
+
+The result should be treated as Pinora firmware, not as an unchanged copy of the upstream ESP-Rust template. The upstream template is the technical starting point; Pinora owns the generated structure and behavior.
+
+## Desktop UI Architecture
+
+The `UI/` directory contains Pinora's desktop application. It uses Electrobun with Bun, React, TypeScript, and Vite, but the application itself is a custom Pinora system rather than a stock Electrobun starter.
+
+The UI includes Pinora-specific module definitions and views, runtime module state, serial communication workers, shared protocol types, logs, layout components, and device controls. It is generated as part of each project and communicates directly with the Pinora firmware architecture. No Starboard application or service is required.
 
 ## Commands
 
@@ -77,7 +97,7 @@ Run this from the generated project directory or one of its child directories:
 pinora build
 ```
 
-Pinora locates `.espConfig/esp_config.json`, enters the firmware directory, and runs the build command saved in the project configuration.
+Pinora resolves the current Pinora project, enters its firmware directory, and runs the project's configured build workflow.
 
 ### Build and flash
 
@@ -141,20 +161,13 @@ Pinora currently expects the following tools to be installed and available throu
 
 - Rust and Cargo
 - ESP-IDF Rust development environment
-- `cargo-generate`
-- `cargo-edit` for the `cargo add` command
 - `espflash`
 - Bun
 - Git
-- Tauri system prerequisites for your operating system
+- `just`
+- the native build prerequisites required by Electrobun for your operating system
 
-The generated firmware configuration currently uses:
-
-```bash
-source ~/export-esp.sh && cargo build
-```
-
-Your ESP-IDF export script must therefore exist at `~/export-esp.sh`, or the generated `.espConfig/esp_config.json` must be adjusted to use the correct command for your environment.
+Generated projects include the ESP-Rust toolchain, Cargo target configuration, ESP-IDF defaults, and shared `just` recipes needed by the Pinora firmware workflow. Your ESP-IDF Rust environment must still be installed and available to those commands.
 
 ## Installation
 
@@ -229,15 +242,15 @@ just release
 
 The `release` recipe builds in release mode and force-installs the latest local binary.
 
-## Generated Project Configuration
+## Project Metadata
 
 Each generated project contains:
 
 ```text
-.espConfig/esp_config.json
+pinora.toml
 ```
 
-The configuration currently stores information such as:
+This file identifies the project and keeps its root-level Pinora metadata with the firmware and UI it belongs to. The CLI also maintains a local project database containing operational information such as:
 
 - project name
 - unique project ID
@@ -247,7 +260,7 @@ The configuration currently stores information such as:
 - flash command
 - installed components
 
-Pinora searches upward from the current directory for this configuration, allowing project commands to work from the project root and nested folders.
+This metadata is owned by Pinora and does not require Starboard or another project-management application.
 
 ## Component Registry
 
@@ -259,7 +272,7 @@ When a component is installed, Pinora:
 2. checks whether the component is already installed
 3. queries the remote registry
 4. downloads the selected Rust file
-5. regenerates `Firmware/src/module/mod.rs`
+5. updates `Firmware/src/module/mod.rs`
 6. updates the project configuration and local project database
 
 A network connection is required for project template downloads and component installation.
@@ -279,7 +292,7 @@ The generated projects combine:
 
 - Rust
 - ESP-IDF
-- Tauri 2
+- Electrobun
 - React
 - TypeScript
 - Vite
@@ -295,20 +308,23 @@ src/
 ├── commands.rs                   # Command module exports
 ├── commands/
 │   ├── create.rs                 # Firmware and UI project generation
-│   └── build.rs                  # Firmware build execution
+│   ├── build.rs                  # Firmware build execution
+│   └── root/mod.rs               # Root project files and metadata
+├── firmware/                     # Pinora firmware source manifest
+├── ui/                           # Pinora desktop UI source manifest
+├── module.rs                     # Component installation
 ├── progress.rs                   # Structured task progress reporting
 ├── project_config.rs             # Per-project configuration handling
 ├── project_config_database.rs    # Global project database handling
-├── sharedtypes.rs                # Shared types, dependency lists, and constants
-├── utility.rs                    # Downloads, dependencies, logging, and ports
-└── file_json.rs                  # Reserved template-file loading work
+├── global_definition.rs          # Shared project and template types
+└── utility.rs                    # Downloads, file generation, logging, and ports
 ```
 
 ## Known Limitations
 
 - The command parser is currently custom rather than based on a dedicated CLI framework.
 - Some user-facing error messages still reference the former `esp` command name and are being migrated to `pinora`.
-- The generated build command currently assumes a Unix-like shell and `~/export-esp.sh`.
+- Configured build commands are currently executed through a Unix-like `bash` shell.
 - The firmware output path is currently specific to the `xtensa-esp32-espidf` debug target.
 - Project names cannot currently contain hyphens or dots.
 - Template and component sources are currently tied to specific GitHub repository paths and branches.
@@ -326,13 +342,14 @@ Planned areas of improvement include:
 - project listing and management commands
 - safer recovery from partially completed project creation
 - improved component metadata and compatibility information
-- tighter integration with Pinora Studio
 - automated release binaries and installers
 
-## Related Projects
+## Project Sources
 
-- **Pinora Studio** — the desktop interface for managing and interacting with Pinora projects
-- **Pinora Template** — the source templates and firmware components used during project generation
+- **ESP-Rust / ESP-IDF template** — the upstream foundation from which Pinora firmware originally evolved
+- **Pinora Template** — the Pinora-owned firmware, UI, root project files, and components downloaded during project generation
+
+Pinora does not require Starboard or a separate desktop management system. The generated firmware and UI are the Pinora system.
 
 ## Contributing
 

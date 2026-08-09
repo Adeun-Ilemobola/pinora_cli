@@ -1,6 +1,5 @@
 mod commands;
 mod module;
-mod file_json;
 mod progress;
 mod project_config;
 mod project_config_database;
