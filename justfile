@@ -1,10 +1,10 @@
+set windows-shell := ["powershell.exe", "-NoProfile", "-Command"]
+
 build:
     cargo build
 
-install:
-    cargo build
-    cargo install --path .
-
 release:
     cargo build --release
+
+install:
     cargo install --path . --force

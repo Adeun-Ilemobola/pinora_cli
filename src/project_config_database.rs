@@ -1,5 +1,18 @@
 use crate::{global_definition::{LogType, ProjectConfig}, utility::log};
-use std::path::PathBuf;
+use std::{fs, path::PathBuf};
+
+
+pub const CONFIG_FOLDER_NAME: &str = ".pinora";
+pub const CONFIG_FILE_NAME: &str = "project_config.json";
+
+#[derive(Debug)]
+pub enum ConfigError {
+    CouldNotFindHomeDirectory,
+    CouldNotReadDatabase,
+    CouldNotParseDatabase,
+    CouldNotCreateConfigDirectory,
+    CouldNotWriteConfigFile,
+}
 
 fn database_path() -> Option<PathBuf> {
     Some(dirs::home_dir()?.join("esp_rust_projects.json"))
@@ -57,6 +70,32 @@ pub fn save_project_to_database(project_config: &ProjectConfig) {
     let mut projects = load_project_database();
     projects.push(project_config.clone());
     write_database(&projects);
+}
+
+pub fn create_file_config(new_config: &ProjectConfig , root_folder: &PathBuf) -> Result<(), ConfigError> {
+    if !root_folder.exists() || !root_folder.is_dir() {
+        return Err(ConfigError::CouldNotCreateConfigDirectory);
+    }
+    let config_path_folder = root_folder.join(CONFIG_FOLDER_NAME);
+    fs::create_dir_all(&config_path_folder).map_err(|error| {
+        log(
+            &format!("Could not create directory {}: {}", config_path_folder.display(), error),
+            "Project Database",
+            LogType::Error,
+        );
+        ConfigError::CouldNotCreateConfigDirectory
+    })?;
+    let config_path = config_path_folder.join(CONFIG_FILE_NAME);
+    let serialised = serde_json::to_string_pretty(new_config).map_err(|_| ConfigError::CouldNotWriteConfigFile)?;
+    if let Err(error) = std::fs::write(&config_path, serialised) {
+        log(
+            &format!("Could not write {}: {}", config_path.display(), error),
+            "Project Database",
+            LogType::Error,
+        );
+        return Err(ConfigError::CouldNotWriteConfigFile);
+    }
+    Ok(())
 }
 
 pub fn update_project_config(new_config: &ProjectConfig) {

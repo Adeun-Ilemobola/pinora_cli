@@ -6,6 +6,17 @@ use anyhow::{Context, Result};
 use std::fs;
 use std::io::{self, Write};
 use std::path::{Path};
+#[derive(Debug, Clone, Copy)]
+enum FileAction<'a> {
+    Replace{file: &'a Path, new_content: &'a str},
+    Insert{file: &'a Path, target: &'a str, new_content: &'a str, is_new_line: bool},
+}
+#[derive(Debug)]
+pub enum FileActionError {
+    FileDoesNotExist(String),
+    FailedToReadFile(String),
+    FailedToWriteFile(String),
+}
 
 
 pub async fn download_file(git_url: &str, output_path: &Path) -> Result<()> {
@@ -97,52 +108,67 @@ pub fn select_serial_port() -> Option<String> {
 }
 
 
-pub fn file_change(file: &Path, target: &str, new_content: &str, is_new_line: bool) -> Result<()> {
+pub fn file_change(file: &Path, target: &str, new_content: &str, is_new_line: bool) -> Result<(), FileActionError> {
     if !file.is_file() {
-        anyhow::bail!("TOML file does not exist: {}", file.display());
+        return Err(FileActionError::FileDoesNotExist(file.display().to_string()));
     }
 
     let content =
-        fs::read_to_string(&file).with_context(|| format!("Failed to read {}", file.display()))?;
+        fs::read_to_string(&file).map_err(|_| FileActionError::FailedToReadFile(file.display().to_string()))?;
     if is_new_line {
         let target_position = content
             .find(target)
-            .with_context(|| format!("Target {target:?} was not found in {}", file.display()))?;
+            .ok_or(FileActionError::FailedToReadFile(file.display().to_string()))?;
         let insertion_position = target_position + target.len();
         let (before, after) = content.split_at(insertion_position);
 
         let updated_content = format!("{before}\n{new_content}{after}");
 
         fs::write(&file, updated_content)
-            .with_context(|| format!("Failed to write {}", file.display()))?;
+            .map_err(|_| FileActionError::FailedToWriteFile(file.display().to_string()))?;
 
         return Ok(());
     }
     let data = content.replacen(target, &new_content, 1);
-    fs::write(&file, data).with_context(|| format!("Failed to write {}", file.display()))?;
+    fs::write(&file, data).map_err(|_| FileActionError::FailedToWriteFile(file.display().to_string()))?;
 
     Ok(())
 }
 
-pub fn file_replace(file: &Path, new_content: &str) -> Result<()> {
-    fs::write(&file, "").with_context(|| format!("Failed to write {}", file.display()))?;
+pub fn file_replace(file: &Path, new_content: &str) -> Result<(), FileActionError> {
+    fs::write(&file, "").map_err(|_| FileActionError::FailedToWriteFile(file.display().to_string()))?;
 
-    fs::write(&file, new_content).with_context(|| format!("Failed to write {}", file.display()))?;
+    fs::write(&file, new_content).map_err(|_| FileActionError::FailedToWriteFile(file.display().to_string()))?;
 
     Ok(())
 }
+
+
+ fn file_action<'a>(action: FileAction<'a>) -> Result<(), FileActionError> {
+    match action {
+        FileAction::Insert { file, target, new_content, is_new_line } => {
+            file_change(file, target, new_content, is_new_line)
+        }
+        FileAction::Replace { file, new_content } => {
+            file_replace(file, new_content)
+        }
+    }
+}
+
 
 pub async fn generate_file(
     source: &SourceTemplate,
     root_dir: &Path,
     config: &ProjectConfig,
-) -> Result<(), String> {
+) -> Result<(), FileActionError> {
+
     let output_path = root_dir.join(source.output_path);
+
     if let Some(parent) = output_path.parent() {
         match fs::create_dir_all(parent) {
             Ok(_) => {}
             Err(err) => {
-                return Err(format!("At create_dir_all :{:?}", err));
+                return Err(FileActionError::FailedToWriteFile(format!("At create_dir_all :{:?}", err)));
             }
         }
     }
@@ -156,20 +182,20 @@ pub async fn generate_file(
             "Create",
             LogType::Error,
         );
-        return Err(format!(
+        return Err(FileActionError::FailedToWriteFile(format!(
             "Could not download root template {}: {}",
             source.name, error
-        ));
+        )));
     }
 
     for edit in source.edits {
-        apply_edit(output_path.as_path(), edit, config);
+        apply_edit(output_path.as_path(), edit, config)?;
     }
 
     Ok(())
 }
 
-fn apply_edit(output_path: &Path, item: &TemplateEdit, config: &ProjectConfig) {
+fn apply_edit(output_path: &Path, item: &TemplateEdit, config: &ProjectConfig) -> Result<(), FileActionError> {
     match item {
         TemplateEdit::InsertAfter {
             target,
@@ -182,7 +208,12 @@ fn apply_edit(output_path: &Path, item: &TemplateEdit, config: &ProjectConfig) {
                 TemplateValue::UiPath => config.ui_path.as_str(),
                 TemplateValue::ProjectName => config.project_name.as_str(),
             };
-            let _ = file_change(output_path, target, data, *new_line);
+             file_action(FileAction::Insert {
+                file: output_path,
+                target,
+                new_content: data,
+                is_new_line: *new_line,
+            })?;
         }
         TemplateEdit::Replace { replacement } => {
             let data = match replacement {
@@ -191,7 +222,11 @@ fn apply_edit(output_path: &Path, item: &TemplateEdit, config: &ProjectConfig) {
                 TemplateValue::UiPath => config.ui_path.as_str(),
                 TemplateValue::ProjectName => config.project_name.as_str(),
             };
-            let _ = file_replace(output_path, data);
+            file_action(FileAction::Replace {
+                file: output_path,
+                new_content: data,
+            })?;
         }
     }
+    Ok(())
 }

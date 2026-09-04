@@ -7,6 +7,7 @@ mod utility;
 mod firmware;
 mod global_definition;
 mod ui;
+mod root;
 use anyhow::Result;
 use commands::build::build_esp;
 use commands::create::pre_create;
@@ -144,7 +145,16 @@ async fn main() {
 
     match command.as_str() {
         "create" => {
-            pre_create(&args).await;
+           match  pre_create(&args).await {
+               Ok(_) => {}
+               Err(error) => {
+                   log(
+                       &format!("Failed to create project: {:?}", error),
+                       "Create",
+                       LogType::Error,
+                   );
+               }
+           }
         }
 
         "run" => {

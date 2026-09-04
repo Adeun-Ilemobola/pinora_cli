@@ -18,7 +18,7 @@ macro_rules! root_item {
         SourceTemplate {
             name: $path,
             github_source_url: concat!(
-                "https://raw.githubusercontent.com/Adeun-Ilemobola/Pinora_Templat/feat/electrobun-architecture/",
+                "https://raw.githubusercontent.com/Adeun-Ilemobola/Pinora_Templat/migration/slint-ui-protocol-workspace/",
                 $path
             ),
             output_path: $path,
@@ -30,7 +30,7 @@ macro_rules! root_item {
         SourceTemplate {
             name: $path,
             github_source_url: concat!(
-                "https://raw.githubusercontent.com/Adeun-Ilemobola/Pinora_Templat/feat/electrobun-architecture/",
+                "https://raw.githubusercontent.com/Adeun-Ilemobola/Pinora_Templat/migration/slint-ui-protocol-workspace/",
                 $path
             ),
             output_path: $path,
@@ -57,7 +57,8 @@ macro_rules! root_item {
 //     root_folder!("tests/protocol_wire.rs"),
 // ];
 
-pub(crate) static NEW_ROOT_TEMPLATE_LIST: [SourceTemplate; 3] = [
+pub(crate) static NEW_ROOT_TEMPLATE_LIST: [SourceTemplate; 20] = [
+    root_item!(".gitignore"),
     root_item!(
         "justfile",
         TemplateEdit::InsertAfter{
@@ -81,7 +82,6 @@ pub(crate) static NEW_ROOT_TEMPLATE_LIST: [SourceTemplate; 3] = [
             new_line:false
         }
 ),
-    root_item!(".gitignore"),
     root_item!(
         "pinora.toml",
         TemplateEdit::InsertAfter {
@@ -90,4 +90,21 @@ pub(crate) static NEW_ROOT_TEMPLATE_LIST: [SourceTemplate; 3] = [
             new_line:false
         },
     ),
+    root_item!("protocol/Cargo.toml"),
+    root_item!("protocol/src/command.rs"),
+    root_item!("protocol/src/global_definitions.rs"),
+    root_item!("protocol/src/lib.rs"),
+    root_item!("protocol/src/module/buttonmodule.rs"),
+    root_item!("protocol/src/module/imu/imu_type.rs"),
+    root_item!("protocol/src/module/imu/mod.rs"),
+    root_item!("protocol/src/module/ledmodule.rs"),
+    root_item!("protocol/src/module/lidar.rs"),
+    root_item!("protocol/src/module/mod.rs"),
+    root_item!("protocol/src/module/range_finder.rs"),
+    root_item!("protocol/src/module/remote_receiver.rs"),
+    root_item!("protocol/src/module/rfid.rs"),
+    root_item!("protocol/src/module/servomodule.rs"),
+    root_item!("protocol/src/module/stepper.rs"),
+    root_item!("protocol/src/module_event.rs"),
+    root_item!("protocol/src/registration.rs"),
 ];
