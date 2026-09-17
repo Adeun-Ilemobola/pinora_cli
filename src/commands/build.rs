@@ -28,9 +28,9 @@ pub fn build_esp(task_continue: bool) -> bool {
     match status {
         Ok(status) if status.success() => {
             if task_continue {
-                task.Complete(format!("Build succeeded for '{}'", config.project_name));
+                task.complete(format!("Build succeeded for '{}'", config.project_name));
             } else {
-                task.Complete(format!("Build succeeded for '{}'", config.project_name));
+                task.complete(format!("Build succeeded for '{}'", config.project_name));
             }
 
             true

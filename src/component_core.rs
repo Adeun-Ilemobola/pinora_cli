@@ -1,5 +1,5 @@
 use crate::{
-    firmware::firmware_store::firmware_template, global_definition::SourceTemplate, project_config::load_config, ui::ui_store::ui_template, utility::generate_file,
+    firmware::firmware_store::firmware_template, global_definition::SourceTemplate, progress::ProgressTask, project_config::{load_config, update_config_file_with_component}, ui::ui_store::ui_template, utility::generate_file,
 };
 use std::path::PathBuf;
 
@@ -11,7 +11,7 @@ pub struct Component {
 
 pub struct ComponentCore {
     pub components: Vec<Component>,
-    root_dir: PathBuf,
+    pub  root_dir: PathBuf,
 }
     
 impl ComponentCore {
@@ -45,12 +45,12 @@ impl ComponentCore {
         None
     }
 
-     pub async  fn add_component(&mut self, component: &str) {
+     pub async  fn add_component(&mut self, component: &str, task: &mut ProgressTask) {
         let config;
         match load_config() {
            Some(cfg) => {
                config = cfg;
-               println!("Loaded config successfully for component {}", config);
+               task.step("[Component] Loaded config successfully");
            }
            None => {
                eprintln!("Failed to load config");
@@ -62,6 +62,7 @@ impl ComponentCore {
 
         if (!firmware_root.exists() || !ui_root.exists()) || firmware_root.is_file() || ui_root.is_file() {
             eprintln!("Firmware or UI root does not exist or is not a directory");
+            task.fail("Firmware or UI root does not exist or is not a directory");
             return;
         }
         if let Some(comp) = self.components_valid(component) {
@@ -69,42 +70,49 @@ impl ComponentCore {
             for ff in &comp.firmware_file {
                match generate_file(ff, &firmware_root, &config).await {
                    Ok(_) => {
-                       println!("
-                       Generated firmware file for 
-                       component {} | 
-                       root_dir: {} |
-                       firmware_root: {} |
-                       ui_root: {} |
-                       source_file: {} |
+                    //    println!("
+                    //    Generated firmware file for 
+                    //    component {} | 
+                    //    root_dir: {} |
+                    //    firmware_root: {} |
+                    //    ui_root: {} |
+                    //    source_file: {} |
                        
-                       ", component, self.root_dir.display(), firmware_root.display(), ui_root.display(), ff);
+                    //    ", component, self.root_dir.display(), firmware_root.display(), ui_root.display(), ff);
+                    task.step("[Component] Generated firmware file successfully");
                    },
                    Err(error) => {
                        eprintln!("Failed to generate firmware file: {}", error);
+                       task.fail(&format!("Failed to generate firmware file: {}", error));
                    }
                }
             }
             for uf in &comp.ui_file {
                 match generate_file(uf, &ui_root, &config).await {
                     Ok(_) => {
-                         println!("
-                       Generated UI file for 
-                       component {} | 
-                       root_dir: {} |
-                       firmware_root: {} |
-                       ui_root: {} |
-                       source_file: {} |
+                    //      println!("
+                    //    Generated UI file for 
+                    //    component {} | 
+                    //    root_dir: {} |
+                    //    firmware_root: {} |
+                    //    ui_root: {} |
+                    //    source_file: {} |
                        
-                       ", component, self.root_dir.display(), firmware_root.display(), ui_root.display(), uf);
+                    //    ", component, self.root_dir.display(), firmware_root.display(), ui_root.display(), uf);
+                     task.step("[Component] Generated UI file successfully");
                         
                     },
                     Err(error) => {
                         eprintln!("Failed to generate UI file: {}", error);
+                        task.fail(&format!("Failed to generate UI file: {}", error));
                     }
                 };
             }
+          
+
         }else {
             eprintln!("Component '{}' not found", component);
+            task.fail(&format!("Component '{}' not found", component));
         }
     }
 

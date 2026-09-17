@@ -1,27 +1,28 @@
 use crate::firmware::firmware_definition::ESP_FOLDER_NAME;
-use crate::firmware::firmware_store::FIRMWARE_TEMPLATE_LIST;
+use crate::firmware::firmware_store::{FIRMWARE_TEMPLATE_COUNT, FIRMWARE_TEMPLATE_LIST};
 use crate::global_definition::{LogType, ProjectConfig};
 use crate::progress::ProgressTask;
 use crate::project_config::project_name_error;
-use crate::project_config_database::{create_file_config, load_project_database, save_project_to_database};
-use crate::root::NEW_ROOT_TEMPLATE_LIST;
+use crate::project_config_database::{
+    create_file_config, load_project_database, save_project_to_database,
+};
+use crate::root::{NEW_ROOT_TEMPLATE_COUNT, NEW_ROOT_TEMPLATE_LIST};
 use crate::ui::ui_definition::UI_FOLDER_NAME;
-use crate::ui::ui_store::UI_TEMPLATE_LIST;
+use crate::ui::ui_store::{UI_TEMPLATE_COUNT, UI_TEMPLATE_LIST};
 use crate::utility::{generate_file, log};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use uuid::Uuid;
 #[derive(Debug)]
-pub  enum FolderError {
+pub enum FolderError {
     TemplateNotFound(String),
     CouldNotCreateDirectory(String),
     ExecutionFailed(String),
-
 }
 
 #[derive(Debug)]
-pub  enum CreateError {
+pub enum CreateError {
     InvalidProjectName(String),
     ProjectAlreadyExists(String),
     PathDoesNotExist(String),
@@ -33,14 +34,16 @@ pub  enum CreateError {
     Root(FolderError),
 }
 
-
 pub async fn pre_create(input: &Vec<String>) -> Result<(), CreateError> {
     // validate name, prepare directory, firmware, ui, save config
-    let mut task = ProgressTask::start("create", 5, "Creating project");
+    const TOTAL_STEPS:u32 = 9 + (FIRMWARE_TEMPLATE_COUNT + NEW_ROOT_TEMPLATE_COUNT + UI_TEMPLATE_COUNT) as u32;
+    let mut task = ProgressTask::start("create", TOTAL_STEPS, "Creating project");
 
     let Some(project_name) = input.get(2).cloned() else {
         task.fail("Missing project name. Usage: esp create <name> [--path <dir>]");
-        return Err(CreateError::InvalidProjectName("Missing project name".to_string()));
+        return Err(CreateError::InvalidProjectName(
+            "Missing project name".to_string(),
+        ));
     };
 
     task.step_with("Validating project name", &project_name);
@@ -102,20 +105,26 @@ pub async fn pre_create(input: &Vec<String>) -> Result<(), CreateError> {
             root_dir.display(),
             error
         ));
-        return Err(CreateError::CouldNotCreateDirectory(root_dir.display().to_string()));
+        return Err(CreateError::CouldNotCreateDirectory(
+            root_dir.display().to_string(),
+        ));
     }
 
-    let new_congif = match create_root_files(&root_dir, &project_name).await {
+    let new_congif = match create_root_files(&root_dir, &project_name, &mut task).await {
         Ok(data) => data,
-        Err(_s) => return Err(CreateError::ExecutionFailed("Failed to create root files".to_string())),
+        Err(_s) => {
+            return Err(CreateError::ExecutionFailed(
+                "Failed to create root files".to_string(),
+            ));
+        }
     };
 
-    if let Err(error) = create_firmware(&root_dir, &new_congif).await {
+    if let Err(error) = create_firmware(&root_dir, &new_congif, &mut task).await {
         task.fail(format!("Could not create firmware: {:?}", error));
         return Err(error);
     }
 
-    if let Err(error) = create_ui(&root_dir, &new_congif).await {
+    if let Err(error) = create_ui(&root_dir, &new_congif, &mut task).await {
         task.fail(format!("Could not create UI: {:?}", error));
         return Err(error);
     }
@@ -140,14 +149,18 @@ pub async fn pre_create(input: &Vec<String>) -> Result<(), CreateError> {
         Err(error) => {
             eprintln!("Failed to execute `just`: {error}");
             task.fail("Failed to execute `just`");
-            return Err(CreateError::ExecutionFailed("Failed to execute `just`".to_string()));
+            return Err(CreateError::ExecutionFailed(
+                "Failed to execute `just`".to_string(),
+            ));
         }
     }
-
-  
 }
 
-async fn create_root_files(root_dir: &Path, project_name: &str) -> Result<ProjectConfig, CreateError> {
+async fn create_root_files(
+    root_dir: &Path,
+    project_name: &str,
+    task: &mut ProgressTask,
+) -> Result<ProjectConfig, CreateError> {
     let temp_config = ProjectConfig {
         project_name: project_name.to_string(),
         firmware_path: format!("{}", root_dir.join(ESP_FOLDER_NAME).display()),
@@ -157,49 +170,71 @@ async fn create_root_files(root_dir: &Path, project_name: &str) -> Result<Projec
         flash_command: "just flash".to_string(),
         install_components: Vec::new(),
     };
-
+    task.step("[Root] Creating root files");
     match create_file_config(&temp_config, &root_dir.to_path_buf()) {
-        Ok(_) => {}
-        Err(error) => return Err(CreateError::ExecutionFailed(format!("Failed to create file config: {:?}", error))),
+        Ok(_) => {
+            task.step("[Root] Created file config");
+        }
+        Err(error) => {
+            return Err(CreateError::ExecutionFailed(format!(
+                "Failed to create file config: {:?}",
+                error
+            )));
+        }
     }
 
     for item in NEW_ROOT_TEMPLATE_LIST.iter() {
         match generate_file(item, root_dir, &temp_config).await {
-            Ok(_) => {}
-            Err(err) => return Err(CreateError::Root(FolderError::CouldNotCreateDirectory(
-                format!("{:?}", err),
-            ))),
+            Ok(_) => {
+                task.step(&format!("Created file: {:?}", item));
+            }
+            Err(err) => {
+                task.fail(&format!("Failed to create file: {:?}", item));
+                return Err(CreateError::Root(FolderError::CouldNotCreateDirectory(
+                    format!("{:?}", err),
+                )));
+            }
         }
     }
 
     Ok(temp_config)
 }
 
-async fn create_firmware(root_dir: &Path, temp_config: &ProjectConfig) -> Result<(), CreateError> {
+async fn create_firmware(root_dir: &Path, temp_config: &ProjectConfig , task: &mut ProgressTask,) -> Result<(), CreateError> {
     let firmware_path = root_dir.join(ESP_FOLDER_NAME);
     let _ = fs::create_dir_all(&firmware_path);
-
+    task.step("[Firmware] Creating firmware files");
     for item in FIRMWARE_TEMPLATE_LIST.iter() {
         match generate_file(item, &firmware_path.as_path(), &temp_config).await {
-            Ok(_) => {}
-            Err(err) => return Err(CreateError::Firmware(FolderError::CouldNotCreateDirectory(
-                format!("{:?}", err),
-            ))),
+            Ok(_) => {
+                task.step(&format!("[Firmware] Created file: {:?}", item));
+            }
+            Err(err) => {
+                task.fail(&format!("[Firmware] Failed to create file: {:?}", item));
+                return Err(CreateError::Firmware(FolderError::CouldNotCreateDirectory(
+                    format!("{:?}", err),
+                )));
+            }
         }
     }
     Ok(())
 }
 
-async fn create_ui(root_dir: &Path, temp_config: &ProjectConfig) -> Result<(), CreateError> {
+async fn create_ui(root_dir: &Path, temp_config: &ProjectConfig, task: &mut ProgressTask) -> Result<(), CreateError> {
     let ui_path = root_dir.join(UI_FOLDER_NAME);
     let _ = fs::create_dir_all(&ui_path);
-
+    task.step("[UI] Creating UI files");
     for item in UI_TEMPLATE_LIST.iter() {
         match generate_file(item, &ui_path.as_path(), &temp_config).await {
-            Ok(_) => {}
-            Err(err) => return Err(CreateError::Ui(FolderError::CouldNotCreateDirectory(
-                format!("{:?}", err),
-            ))),
+            Ok(_) => {
+                task.step(&format!("[UI] Created file: {:?}", item));
+            }
+            Err(err) => {
+                task.fail(&format!("[UI] Failed to create file: {:?}", item));
+                return Err(CreateError::Ui(FolderError::CouldNotCreateDirectory(
+                    format!("{:?}", err),
+                )));
+            }
         }
     }
     Ok(())

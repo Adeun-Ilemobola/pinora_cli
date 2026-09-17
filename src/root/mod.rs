@@ -71,7 +71,8 @@ macro_rules! protocol_item {
         }
     };
 }
-pub(crate) static NEW_ROOT_TEMPLATE_LIST: [SourceTemplate; 21] = [
+pub const NEW_ROOT_TEMPLATE_COUNT: usize = 21;
+pub(crate) static NEW_ROOT_TEMPLATE_LIST: [SourceTemplate; NEW_ROOT_TEMPLATE_COUNT] = [
     root_item!(".gitignore"),
     root_item!(
         "justfile",

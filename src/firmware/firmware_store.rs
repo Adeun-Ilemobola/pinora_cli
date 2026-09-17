@@ -16,8 +16,8 @@ use crate::global_definition::{SourceTemplate, TemplateEdit, TemplateValue};
 
 pub(crate) use firmware_template;
 
-
-pub static FIRMWARE_TEMPLATE_LIST: [SourceTemplate; 32] = [
+pub const FIRMWARE_TEMPLATE_COUNT: usize = 32;
+pub static FIRMWARE_TEMPLATE_LIST: [SourceTemplate; FIRMWARE_TEMPLATE_COUNT ] = [
     SourceTemplate {
         edits: &[TemplateEdit::SetTomlString {
             table: "build",

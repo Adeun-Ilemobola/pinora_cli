@@ -15,8 +15,8 @@ macro_rules! ui_template {
 }
 
 pub(crate) use ui_template;
-
-pub static UI_TEMPLATE_LIST: [SourceTemplate; 80] = [
+pub const UI_TEMPLATE_COUNT: usize = 80;
+pub static UI_TEMPLATE_LIST: [SourceTemplate; UI_TEMPLATE_COUNT] = [
     ui_template!(".gitignore"),
     ui_template!(".vscode/extensions.json"),
     ui_template!("README.md"),

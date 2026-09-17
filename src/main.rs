@@ -1,131 +1,32 @@
 mod commands;
+mod component_core;
+mod firmware;
+mod global_definition;
 mod module;
 mod progress;
 mod project_config;
 mod project_config_database;
-mod utility;
-mod firmware;
-mod global_definition;
-mod ui;
 mod root;
-mod component_core;
+mod ui;
+mod utility;
 use anyhow::Result;
 use commands::build::build_esp;
 use commands::create::pre_create;
 use progress::ProgressTask;
-use project_config::{load_config};
+use project_config::load_config;
 use reqwest::header::{ACCEPT, USER_AGENT};
 use std::env;
 use std::path::Path;
 use std::process::Command;
-use utility::{ log, select_serial_port};
+use utility::{log, select_serial_port};
 
-use crate::{component_core::ComponentCore, firmware::firmware_definition::ESP_FOLDER_NAME, global_definition::{BRANCH_NAME, GitHubItem, LogType}, module::add_modules};
-
-async fn load_all_modules() -> Result<Vec<GitHubItem>, String> {
-    let url = &format!(
-        "https://api.github.com/repos/Adeun-Ilemobola/rust_esp32_based/contents/src/module?ref={}",
-        BRANCH_NAME
-    );
-    let client = reqwest::Client::new();
-    let response: Vec<GitHubItem> = client
-        .get(url)
-        .header(USER_AGENT, "Mozilla/5.0 (compatible; MyRustApp/1.0)")
-        .header(ACCEPT, "application/vnd.github.v3+json")
-        .send()
-        .await
-        .map_err(|err| err.to_string())?
-        .json::<Vec<GitHubItem>>()
-        .await
-        .map_err(|err| err.to_string())?;
-
-    let modules: Vec<GitHubItem> = response
-        .into_iter()
-        .filter(|item| {
-            item.item_type == "file"
-                && item.name.ends_with(".rs")
-                && item.name != "mod.rs"
-                && item.name != "ModuleCore.rs"
-        })
-        .collect();
-
-    Ok(modules)
-}
+use crate::{
+    component_core::ComponentCore, firmware::firmware_definition::ESP_FOLDER_NAME, global_definition::LogType, project_config::update_config_file_with_component,
+};
 
 
 
-fn run_project_flash(port: Option<String>) -> bool {
-    // load config, choose port, locate binary, flash
-    let mut task = ProgressTask::start("flash", 4, "Preparing to flash");
 
-    let Some(config) = load_config() else {
-        task.fail(
-            "No project config found here. Run `esp create <name>`, or cd into an existing project.",
-        );
-        return false;
-    };
-    task.step_with("Loaded project config", &config.project_name);
-
-    // An explicit --port is used as given; only prompt when one was not supplied.
-    let selected_port = match port {
-        Some(port) if !port.trim().is_empty() => port,
-        _ => match select_serial_port() {
-            Some(port) => port,
-            None => {
-                task.fail("No serial port selected, so nothing was flashed");
-                return false;
-            }
-        },
-    };
-    task.step_with("Selected serial port", &selected_port);
-
-    let elf_path = Path::new(&config.firmware_path)
-        .join("target")
-        .join("xtensa-esp32-espidf")
-        .join("debug")
-        .join(ESP_FOLDER_NAME);
-
-    if !elf_path.exists() {
-        task.fail(format!(
-            "No firmware binary at {}. Run `esp build` first.",
-            elf_path.display()
-        ));
-        return false;
-    }
-    task.step_with("Located firmware binary", elf_path.display().to_string());
-
-    task.step_with(
-        format!("Flashing '{}' to {}", config.project_name, selected_port),
-        "espflash flash --monitor",
-    );
-
-    // Inherits stdio, so the device monitor stays interactive.
-    let status = Command::new("espflash")
-        .arg("flash")
-        .arg("--monitor")
-        .arg(&elf_path)
-        .env("ESPFLASH_PORT", &selected_port)
-        .current_dir(&config.firmware_path)
-        .status();
-
-    match status {
-        Ok(status) if status.success() => {
-            task.Complete(format!(
-                "Flashed '{}' to {}",
-                config.project_name, selected_port
-            ));
-            true
-        }
-        Ok(status) => {
-            task.fail(format!("Flashing failed ({})", status));
-            false
-        }
-        Err(error) => {
-            task.fail(format!("Could not run espflash: {}", error));
-            false
-        }
-    }
-}
 
 #[tokio::main]
 async fn main() {
@@ -139,27 +40,29 @@ async fn main() {
      ["project", "listcomponents"]
     */
     let Some(command) = args.get(1) else {
-        log("Please provide a command, e.g. `esp build`.", "Usage", LogType::Error);
+        log(
+            "Please provide a command, e.g. `esp build`.",
+            "Usage",
+            LogType::Error,
+        );
         log("Run `esp help` to see them all.", "Usage", LogType::Info);
         return;
     };
 
     match command.as_str() {
-        "create" => {
-           match  pre_create(&args).await {
-               Ok(_) => {}
-               Err(error) => {
-                   log(
-                       &format!("Failed to create project: {:?}", error),
-                       "Create",
-                       LogType::Error,
-                   );
-               }
-           }
-        }
+        "create" => match pre_create(&args).await {
+            Ok(_) => {}
+            Err(error) => {
+                log(
+                    &format!("Failed to create project: {:?}", error),
+                    "Create",
+                    LogType::Error,
+                );
+            }
+        },
 
         "run" => {
-            let port = if args.len() >= 4 && args[2] == "--port" {
+            let _port = if args.len() >= 4 && args[2] == "--port" {
                 Some(args[3].clone())
             } else {
                 None
@@ -167,7 +70,7 @@ async fn main() {
 
             // build_esp and run_project_flash each report their own progress and reasons.
             if build_esp(true) {
-                run_project_flash(port);
+                // run_project_flash(port);
             }
         }
 
@@ -176,12 +79,14 @@ async fn main() {
         }
 
         "add" => {
+            let mut task = ProgressTask::start("add <component>", 5, "Adding component");
             let Some(name) = args.get(2) else {
                 log(
                     "Please provide a component name, e.g. `esp add ledmodule`.",
                     "Usage",
                     LogType::Error,
                 );
+                task.fail("Missing component name");
                 return;
             };
             let mut component_creater = match ComponentCore::new() {
@@ -192,14 +97,26 @@ async fn main() {
                         "Add Component",
                         LogType::Error,
                     );
+                    task.fail("Failed to initialize component creator");
                     return;
                 }
             };
-           
-            let name_cleaned = name.trim_end_matches(".rs").to_uppercase().trim().to_string();
-            component_creater.add_component(&name_cleaned).await ;
-               
-            
+            task.step("[Component] Initializing component creator");
+
+            let name_cleaned = name
+                .trim_end_matches(".rs")
+                .to_uppercase()
+                .trim()
+                .to_string();
+            component_creater
+                .add_component(&name_cleaned, &mut task)
+                .await;
+            if update_config_file_with_component(&component_creater.root_dir, &name_cleaned) {
+                task.step("[Component] Updated config file with component successfully");
+            } else {
+                task.fail("Failed to update config file with component");
+            }
+            task.finish(&format!("[Component] Added component '{}'", name_cleaned));
         }
 
         "listcomponents" => {
@@ -223,8 +140,7 @@ async fn main() {
                     println!("  {}. {}", index + 1, component);
                 }
             }
-            
-        },
+        }
 
         "help" => {
             println!("Available commands:");
@@ -238,7 +154,10 @@ async fn main() {
 
         unknown => {
             log(
-                &format!("Unknown command '{}'. Run `esp help` to see them all.", unknown),
+                &format!(
+                    "Unknown command '{}'. Run `esp help` to see them all.",
+                    unknown
+                ),
                 "Usage",
                 LogType::Error,
             );

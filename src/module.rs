@@ -173,7 +173,7 @@ pub async fn add_modules(name: String) -> Result<(), anyhow::Error> {
         );
     }
 
-    task.Complete(format!(
+    task.complete(format!(
         "Installed '{}' into '{}'",
         found_module.name, data.project_name
     ));
