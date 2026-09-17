@@ -8,6 +8,7 @@ mod firmware;
 mod global_definition;
 mod ui;
 mod root;
+mod component_core;
 use anyhow::Result;
 use commands::build::build_esp;
 use commands::create::pre_create;
@@ -19,7 +20,7 @@ use std::path::Path;
 use std::process::Command;
 use utility::{ log, select_serial_port};
 
-use crate::{firmware::firmware_definition::ESP_FOLDER_NAME, global_definition::{BRANCH_NAME, GitHubItem, LogType}, module::add_modules};
+use crate::{component_core::ComponentCore, firmware::firmware_definition::ESP_FOLDER_NAME, global_definition::{BRANCH_NAME, GitHubItem, LogType}, module::add_modules};
 
 async fn load_all_modules() -> Result<Vec<GitHubItem>, String> {
     let url = &format!(
@@ -183,31 +184,46 @@ async fn main() {
                 );
                 return;
             };
-            let component_name = name.strip_suffix(".rs").unwrap_or(name);
-            let component_name = component_name
-                .strip_suffix("module")
-                .unwrap_or(component_name)
-                .to_string();
-            let _ = add_modules(component_name).await;
+            let mut component_creater = match ComponentCore::new() {
+                Ok(com) => com,
+                Err(error) => {
+                    log(
+                        &format!("Failed to initialize component creator: {:?}", error),
+                        "Add Component",
+                        LogType::Error,
+                    );
+                    return;
+                }
+            };
+           
+            let name_cleaned = name.trim_end_matches(".rs").to_uppercase().trim().to_string();
+            component_creater.add_component(&name_cleaned).await ;
+               
+            
         }
 
-        "listcomponents" => match load_all_modules().await {
-            Ok(modules) if modules.is_empty() => {
-                log("No components found in the registry.", "Components", LogType::Info);
-            }
-            Ok(modules) => {
-                println!("Available components ({}):", modules.len());
-                for (index, module) in modules.iter().enumerate() {
-                    println!("  {}. {}", index + 1, module.name.trim_end_matches(".rs"));
+        "listcomponents" => {
+            let component_creater = match ComponentCore::new() {
+                Ok(com) => com,
+                Err(error) => {
+                    log(
+                        &format!("Failed to initialize component creator: {:?}", error),
+                        "List Components",
+                        LogType::Error,
+                    );
+                    return;
+                }
+            };
+            let components = component_creater.list_all_components();
+            if components.is_empty() {
+                log("No components found.", "Components", LogType::Info);
+            } else {
+                println!("Available components ({}):", components.len());
+                for (index, component) in components.iter().enumerate() {
+                    println!("  {}. {}", index + 1, component);
                 }
             }
-            Err(error) => {
-                log(
-                    &format!("Could not fetch components: {}", error),
-                    "Components",
-                    LogType::Error,
-                );
-            }
+            
         },
 
         "help" => {

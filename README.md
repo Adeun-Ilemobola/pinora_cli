@@ -4,7 +4,7 @@ Pinora CLI is a Rust-based project generator and management tool for building co
 
 Pinora is self-contained. It does not depend on Starboard or on a separate scaffolding application. The CLI creates the firmware, desktop UI, project metadata, and shared project commands that make up a Pinora project.
 
-The firmware started from the official `esp-rs/esp-idf-template`, but has since evolved into Pinora's own firmware architecture. The desktop UI is likewise a heavily customized Electrobun application built with React and TypeScript rather than a stock starter or an external companion app.
+The firmware started from the official `esp-rs/esp-idf-template`, but has since evolved into Pinora's own firmware architecture. The desktop UI is likewise a heavily customized Tauri application built with React and TypeScript rather than a stock starter or an external companion app.
 
 > **Status:** Pinora CLI is in active early development. The current release is `0.1.0`, and commands, generated files, and project configuration may still change.
 
@@ -15,7 +15,8 @@ A new project is generated with two main folders:
 ```text
 <project-name>/
 ├── Firmware/     # Pinora Rust + ESP-IDF firmware
-├── UI/           # Pinora Electrobun + React + TypeScript desktop app
+├── UI/           # Pinora Tauri + React + TypeScript desktop app
+├── protocol/     # Shared Rust protocol types
 ├── justfile      # Shared firmware and UI workflows
 └── pinora.toml   # Project metadata
 ```
@@ -30,7 +31,7 @@ Pinora also stores a lightweight list of known projects in the user's home direc
 
 - Create a complete Pinora ESP32 project without an external scaffolding system
 - Generate Pinora firmware derived from the official `esp-rs/esp-idf-template`
-- Generate Pinora's custom Electrobun, React, and TypeScript desktop UI
+- Generate Pinora's custom Tauri, React, and TypeScript desktop UI
 - Install the root project commands and metadata shared by the firmware and UI
 - Download the maintained Pinora firmware and UI source files
 - Save project paths, IDs, build commands, and installed components
@@ -55,9 +56,9 @@ The result should be treated as Pinora firmware, not as an unchanged copy of the
 
 ## Desktop UI Architecture
 
-The `UI/` directory contains Pinora's desktop application. It uses Electrobun with Bun, React, TypeScript, and Vite, but the application itself is a custom Pinora system rather than a stock Electrobun starter.
+The `UI/` directory contains Pinora's desktop application. It uses Tauri with Bun, React, TypeScript, and Vite, but the application itself is a custom Pinora system rather than a stock Tauri starter.
 
-The UI includes Pinora-specific module definitions and views, runtime module state, serial communication workers, shared protocol types, logs, layout components, and device controls. It is generated as part of each project and communicates directly with the Pinora firmware architecture. No Starboard application or service is required.
+The UI includes Pinora-specific module definitions and views, runtime module state, a Rust backend for serial communication, shared protocol types, logs, layout components, and device controls. It is generated as part of each project and communicates directly with the Pinora firmware architecture. No Starboard application or service is required.
 
 ## Commands
 
@@ -165,7 +166,7 @@ Pinora currently expects the following tools to be installed and available throu
 - Bun
 - Git
 - `just`
-- the native build prerequisites required by Electrobun for your operating system
+- the native build prerequisites required by Tauri for your operating system
 
 Generated projects include the ESP-Rust toolchain, Cargo target configuration, ESP-IDF defaults, and shared `just` recipes needed by the Pinora firmware workflow. Your ESP-IDF Rust environment must still be installed and available to those commands.
 
@@ -292,7 +293,7 @@ The generated projects combine:
 
 - Rust
 - ESP-IDF
-- Electrobun
+- Tauri
 - React
 - TypeScript
 - Vite
@@ -366,3 +367,64 @@ Keep changes focused and document any modification to generated project structur
 ## License
 
 No license has been declared yet. Until a license is added, the repository remains under standard copyright protection and reuse is not automatically granted.
+
+## Template synchronization
+
+Firmware, UI, and shared protocol files are downloaded from the Pinora template repository's main branch. The UI manifest follows the Tauri + React application in UI/, including binary icons, frontend tests, and lockfiles. Generated root recipes install Bun dependencies and build through Tauri; Cargo backend checks use UI/src-tauri/Cargo.toml.
+
+To verify live UI generation without building firmware or registering a project, run:
+
+    cargo test --locked scaffold_current_ui -- --ignored --nocapture
+
+This network smoke test leaves its generated project under target/ui-scaffold-<uuid> for inspection.
+## Firmware build directories
+
+During scaffolding, Pinora sets `build.target-dir` in `Firmware/.cargo/config.toml`.
+Windows projects use `C:/p/<5 lowercase base36 characters>`: the complete target
+path is exactly 10 ASCII characters. The key is FNV-1a-64 over all 16 bytes of the
+existing `ProjectConfig.id` UUID, reduced modulo 36^5 and padded to five digits.
+The algorithm is fixed across CLI versions. For example:
+`8f31a240-1234-4abc-8abc-012345678901` produces `C:/p/wo10j`, and
+`b772c119-5678-4abc-8abc-012345678901` produces `C:/p/2ucaa`.
+UUID parsing rejects malformed IDs. Renaming a project does not change its key.
+
+Five base36 characters provide 60,466,176 possible keys, so collisions remain
+possible. Before writing a generated Cargo config, Pinora atomically reserves
+the key with a small sibling file, `C:/p/<key>.owner`, containing the full UUID.
+A different UUID, malformed owner file, or existing unowned target stops
+scaffolding rather than sharing artifacts. A collision requires creating a
+project with a new UUID. Ownership files survive Cargo clean and source deletion;
+do not remove them while a project might still use the key. No additional
+ProjectConfig field, global Cargo setting, or toolchain change is needed.
+
+Linux and macOS scaffolds use `target`, relative to Firmware. The host OS is
+selected when scaffolding; a generated Windows checkout retains its Windows
+setting if moved to another OS. Copied projects with the same ID/config retain
+the same target; use `pinora create` for independent firmware instances.
+
+Run Cargo from Firmware (or use the generated justfile). Build, check, clean and
+the existing flash command all read the same project config. Explicit Cargo
+target-directory overrides still take precedence. Deleting sources does not
+delete external artifacts: run `cargo +esp-1.93 clean` inside Firmware before
+deleting a project when cleanup is desired. Pinora never recursively deletes
+the shared `C:/p` root. The user needs write access to that root.
+
+The master template has a portable local default; the CLI sets the TOML key
+regardless of its old value, including legacy downloaded `C:/t` templates.
+This applies to newly generated projects; existing configurations are not migrated.
+
+Verify the CLI with `cargo test --locked`. The deterministic tests cover both
+platforms, the complete 10-character path limit, UUID validation, collisions,
+two generated configs, preserved ESP-IDF settings,
+and real Cargo metadata/clean isolation using tiny host crates. Run
+`cargo test --locked scaffold_current_ui -- --ignored --nocapture` for the
+GitHub-backed firmware/UI/protocol scaffold smoke test. It does not compile
+ESP-IDF or launch the UI. Scaffold/check success does not establish that a
+release ESP-IDF build succeeds: verify that separately with the unchanged `just flash` command.
+
+After rebuilding the CLI (`cargo build --locked`), invoke
+`C:\Dev\Pinora\pinora_cli\target\debug\pinora.exe create test1` from your
+test directory. Creation runs the existing `just dev` flow. From
+`test1/Firmware`, verify with `cargo +esp-1.93 check` and
+`cargo +esp-1.93 clean`. Use this rebuilt executable until your installed
+`pinora` binary is updated.

@@ -1,0 +1,19 @@
+[build]
+target = "xtensa-esp32-espidf"
+# Pinora sets this key when scaffolding: C:/p/<5-character base36 key> on Windows.
+# Non-Windows generated projects keep the local target directory.
+target-dir = "target"
+
+[target.'cfg(target_os = "espidf")']
+linker = "ldproxy"
+runner = "espflash flash --monitor"
+rustflags = ["--cfg", "espidf_time64"]
+
+[unstable]
+build-std = ["std", "panic_abort"]
+
+[env]
+CARGO_WORKSPACE_DIR = { value = "", relative = true }
+MCU = "esp32"
+ESP_IDF_VERSION = "v5.5.3"
+ESP_IDF_TOOLS_INSTALL_DIR = "workspace"

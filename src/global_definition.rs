@@ -1,8 +1,9 @@
 use serde::{Deserialize, Serialize};
+use std::fmt;
 
 pub static BRANCH_NAME: &str = "v0"; 
 
-
+#[derive(Debug, Serialize, Clone)]
 pub struct SourceTemplate {
     pub name: &'static str,
     pub github_source_url: &'static str,
@@ -10,7 +11,25 @@ pub struct SourceTemplate {
     pub edits: &'static [TemplateEdit],
 }
 
+impl fmt::Display for SourceTemplate {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "SourceTemplate {{ name: {}, github_source_url: {}, output_path: {}, edits: {:?} }}",
+            self.name,
+            self.github_source_url,
+            self.output_path,
+            self.edits
+        )
+    }
+}
+
+#[derive(Debug, Serialize, Clone, Deserialize)]
 pub enum TemplateEdit {
+    /// Set a string key without depending on its previous spelling or value.
+    SetTomlString {
+        table: &'static str,
+        key: &'static str,
+        value: TemplateValue,
+    },
     Replace {
         // target: &'static str,
         replacement: TemplateValue,
@@ -22,9 +41,27 @@ pub enum TemplateEdit {
     },
 }
 
+impl fmt::Display for TemplateEdit {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            TemplateEdit::SetTomlString { table, key, value } => {
+                write!(f, "SetTomlString {{ table: {}, key: {}, value: {:?} }}", table, key, value)
+            },
+            TemplateEdit::Replace { replacement } => {
+                write!(f, "Replace {{ replacement: {:?} }}", replacement)
+            },
+            TemplateEdit::InsertAfter { target, content, new_line } => {
+                write!(f, "InsertAfter {{ target: {}, content: {:?}, new_line: {} }}", target, content, new_line)
+            },
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Clone, Deserialize)]
 pub enum TemplateValue {
     Literal(&'static str),
     ProjectName,
+    FirmwareTargetDir,
     FirmwarePath,
     UiPath,
 }
@@ -49,6 +86,22 @@ pub struct ProjectConfig {
     pub flash_command: String,
     pub install_components: Vec<String>,
 }
+
+impl fmt::Display for ProjectConfig {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "ProjectConfig {{ project_name: {}, firmware_path: {}, ui_path: {}, id: {}, build_command: {}, flash_command: {}, install_components: {:?} }}",
+            self.project_name,
+            self.firmware_path,
+            self.ui_path,
+            self.id,
+            self.build_command,
+            self.flash_command,
+            self.install_components
+        )
+    }
+}
+
+
 
 pub enum LogType {
     Info,

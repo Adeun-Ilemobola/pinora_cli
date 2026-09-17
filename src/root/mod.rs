@@ -18,7 +18,7 @@ macro_rules! root_item {
         SourceTemplate {
             name: $path,
             github_source_url: concat!(
-                "https://raw.githubusercontent.com/Adeun-Ilemobola/Pinora_Templat/migration/slint-ui-protocol-workspace/",
+                "https://raw.githubusercontent.com/Adeun-Ilemobola/Pinora_Templat/main/",
                 $path
             ),
             output_path: $path,
@@ -30,7 +30,7 @@ macro_rules! root_item {
         SourceTemplate {
             name: $path,
             github_source_url: concat!(
-                "https://raw.githubusercontent.com/Adeun-Ilemobola/Pinora_Templat/migration/slint-ui-protocol-workspace/",
+                "https://raw.githubusercontent.com/Adeun-Ilemobola/Pinora_Templat/main/",
                 $path
             ),
             output_path: $path,
@@ -57,31 +57,34 @@ macro_rules! root_item {
 //     root_folder!("tests/protocol_wire.rs"),
 // ];
 
-pub(crate) static NEW_ROOT_TEMPLATE_LIST: [SourceTemplate; 20] = [
+// Firmware and its shared protocol must come from the same source branch.
+macro_rules! protocol_item {
+    ($path:literal) => {
+        SourceTemplate {
+            name: $path,
+            github_source_url: concat!(
+                "https://raw.githubusercontent.com/Adeun-Ilemobola/Pinora_Templat/main/",
+                $path
+            ),
+            output_path: $path,
+            edits: &[],
+        }
+    };
+}
+pub(crate) static NEW_ROOT_TEMPLATE_LIST: [SourceTemplate; 21] = [
     root_item!(".gitignore"),
     root_item!(
         "justfile",
-        TemplateEdit::InsertAfter{
-            target: "Firmware_Templates",
-            content: TemplateValue::Literal("Firmware"),
-            new_line:false
-        },
-        TemplateEdit::InsertAfter{
-            target: "Firmware_Templates",
-            content: TemplateValue::Literal("Firmware"),
-            new_line:false
-        },
-        TemplateEdit::InsertAfter{
-            target: "UI_Templates",
-            content: TemplateValue::Literal("UI"),
-            new_line:false
-        },
-        TemplateEdit::InsertAfter{
-            target: "UI_Templates",
-            content: TemplateValue::Literal("UI"),
-            new_line:false
-        }
-),
+        TemplateEdit::InsertAfter { target: "Firmware_Templates", content: TemplateValue::Literal("Firmware"), new_line: false },
+        TemplateEdit::InsertAfter { target: "Firmware_Templates", content: TemplateValue::Literal("Firmware"), new_line: false },
+        TemplateEdit::InsertAfter { target: "Firmware_Templates", content: TemplateValue::Literal("Firmware"), new_line: false },
+        TemplateEdit::InsertAfter { target: "Firmware_Templates", content: TemplateValue::Literal("Firmware"), new_line: false },
+        TemplateEdit::InsertAfter { target: "cd UI && cargo build", content: TemplateValue::Literal("cd UI && bun install --frozen-lockfile && bun tauri build --no-bundle"), new_line: false },
+        TemplateEdit::InsertAfter { target: "cd UI && cargo check", content: TemplateValue::Literal("cd UI && bun install --frozen-lockfile && bun run build && cargo check --manifest-path src-tauri/Cargo.toml"), new_line: false },
+        TemplateEdit::InsertAfter { target: "cd UI && cargo clean", content: TemplateValue::Literal("cd UI && cargo clean --manifest-path src-tauri/Cargo.toml"), new_line: false },
+        TemplateEdit::InsertAfter { target: "Slint", content: TemplateValue::Literal("Tauri"), new_line: false },
+        TemplateEdit::InsertAfter { target: "Slint", content: TemplateValue::Literal("Tauri"), new_line: false },
+    ),
     root_item!(
         "pinora.toml",
         TemplateEdit::InsertAfter {
@@ -89,22 +92,24 @@ pub(crate) static NEW_ROOT_TEMPLATE_LIST: [SourceTemplate; 20] = [
             content: TemplateValue::ProjectName,
             new_line:false
         },
+        TemplateEdit::InsertAfter { target: "Firmware_Templates", content: TemplateValue::Literal("Firmware"), new_line: false },
     ),
-    root_item!("protocol/Cargo.toml"),
-    root_item!("protocol/src/command.rs"),
-    root_item!("protocol/src/global_definitions.rs"),
-    root_item!("protocol/src/lib.rs"),
-    root_item!("protocol/src/module/buttonmodule.rs"),
-    root_item!("protocol/src/module/imu/imu_type.rs"),
-    root_item!("protocol/src/module/imu/mod.rs"),
-    root_item!("protocol/src/module/ledmodule.rs"),
-    root_item!("protocol/src/module/lidar.rs"),
-    root_item!("protocol/src/module/mod.rs"),
-    root_item!("protocol/src/module/range_finder.rs"),
-    root_item!("protocol/src/module/remote_receiver.rs"),
-    root_item!("protocol/src/module/rfid.rs"),
-    root_item!("protocol/src/module/servomodule.rs"),
-    root_item!("protocol/src/module/stepper.rs"),
-    root_item!("protocol/src/module_event.rs"),
-    root_item!("protocol/src/registration.rs"),
+    protocol_item!("protocol/Cargo.toml"),
+    protocol_item!("protocol/src/command.rs"),
+    protocol_item!("protocol/src/global_definitions.rs"),
+    protocol_item!("protocol/src/lib.rs"),
+    protocol_item!("protocol/src/module/buttonmodule.rs"),
+    protocol_item!("protocol/src/module/imu/imu_type.rs"),
+    protocol_item!("protocol/src/module/imu/mod.rs"),
+    protocol_item!("protocol/src/module/ledmodule.rs"),
+    protocol_item!("protocol/src/module/lidar.rs"),
+    protocol_item!("protocol/src/module/mod.rs"),
+    protocol_item!("protocol/src/module/range_finder.rs"),
+    protocol_item!("protocol/src/module/remote_receiver.rs"),
+    protocol_item!("protocol/src/module/rfid.rs"),
+    protocol_item!("protocol/src/module/servomodule.rs"),
+    protocol_item!("protocol/src/module/stepper.rs"),
+    protocol_item!("protocol/src/module_event.rs"),
+    protocol_item!("protocol/src/registration.rs"),
+    protocol_item!("protocol/tests/event_package.rs"),
 ];

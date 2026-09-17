@@ -14,6 +14,7 @@ tokio = { version = "1", features = ["full"] }
 serialport = "4.9.0"
 
 anyhow = "1"
+toml_edit = "0.22.27"
 
 [dependencies.uuid]
 version = "1.23.2"

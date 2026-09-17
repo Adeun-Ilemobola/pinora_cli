@@ -110,12 +110,18 @@ pub async fn pre_create(input: &Vec<String>) -> Result<(), CreateError> {
         Err(_s) => return Err(CreateError::ExecutionFailed("Failed to create root files".to_string())),
     };
 
-    let _ = create_firmware(&root_dir, &new_congif).await;
+    if let Err(error) = create_firmware(&root_dir, &new_congif).await {
+        task.fail(format!("Could not create firmware: {:?}", error));
+        return Err(error);
+    }
 
-    let _ = create_ui(&root_dir, &new_congif).await;
+    if let Err(error) = create_ui(&root_dir, &new_congif).await {
+        task.fail(format!("Could not create UI: {:?}", error));
+        return Err(error);
+    }
 
     let status = Command::new("just")
-        .arg("build-all")
+        .arg("dev")
         .current_dir(&root_dir)
         .status();
 
@@ -147,7 +153,7 @@ async fn create_root_files(root_dir: &Path, project_name: &str) -> Result<Projec
         firmware_path: format!("{}", root_dir.join(ESP_FOLDER_NAME).display()),
         ui_path: format!("{}", root_dir.join(UI_FOLDER_NAME).display()),
         id: Uuid::new_v4().to_string(),
-        build_command: "just frontend".to_string(),
+        build_command: "just build-firmware".to_string(),
         flash_command: "just flash".to_string(),
         install_components: Vec::new(),
     };
